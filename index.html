@@ -320,7 +320,7 @@
   .player-row:hover { background: rgba(75,145,99,0.10); }
   .player-row:last-child { border-bottom: none; }
   .player-name { color: var(--ink); }
-  .rating-group { display: flex; gap: 6px; flex-shrink: 0; }
+  .rating-group { display: flex; gap: 6px; flex-shrink: 0; justify-content: flex-end; min-width: 98px; }
   .squad-builder-bar {
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
     margin: 12px 0 14px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: 10px; border: 1px solid var(--line);
@@ -445,8 +445,9 @@
     box-shadow: 0 6px 18px rgba(0,0,0,0.4); transform: scale(1.02);
   }
   .chip {
-    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 5px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 3px 9px; border-radius: 5px;
     font-weight: 700; font-size: 12px; background: #16332485; border: 1px solid var(--line); color: var(--ink-dim);
+    min-width: 46px; box-sizing: border-box;
   }
   .chip .skill { font-weight: 400; opacity: 0.75; font-size: 10.5px; }
   .skill-gold { color: var(--gold) !important; opacity: 1 !important; font-weight: 700; }
