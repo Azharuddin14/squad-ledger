@@ -748,10 +748,27 @@ function chipHtml(rating, skill) {
 // Re-renders the team panel without losing the user's scroll position —
 // used for in-place interactions (toggling a player, reordering, resetting)
 // where a jump back to the top would be jarring.
+//
+// Two defensive measures beyond a simple scrollTo:
+//  1. Blur the active element first. When innerHTML wipes out the button the
+//     user just tapped, some mobile browsers auto-focus the next focusable
+//     element (often the very first item) and scroll it into view — blurring
+//     first prevents that focus handoff from happening at all.
+//  2. Re-apply the scroll restore on the next two animation frames as well,
+//     since layout can still settle (fonts, reflow) a moment after the
+//     synchronous render call returns, which can silently undo a same-tick
+//     scrollTo.
 function renderTeamPanelKeepScroll() {
   const y = window.scrollY;
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
+  }
   renderTeamPanel();
   window.scrollTo(0, y);
+  requestAnimationFrame(() => {
+    window.scrollTo(0, y);
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  });
 }
 
 function renderTeamPanel() {
@@ -1801,9 +1818,7 @@ renderAll();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {
-      // Non-fatal: app still works fully online without offline caching.
-    });
+    navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
 </script>
