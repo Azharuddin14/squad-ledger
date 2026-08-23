@@ -86,8 +86,12 @@
     width: 20px; height: 20px; border-radius: 50%; background: var(--turf-light); color: #05130b;
     font-size: 11px; font-weight: 700;
   }
-  .lineup-player-name { flex: 1 1 auto; color: var(--ink); font-weight: 600; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-  .lineup-player-role { color: var(--ink-dim); font-size: 9px; text-transform: uppercase; font-weight: 400; }
+  .lineup-player-name {
+    flex: 1 1 auto; min-width: 0; color: var(--ink); font-weight: 600;
+    display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap;
+  }
+  .lineup-player-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .lineup-player-role { color: var(--ink-dim); font-size: 9px; text-transform: uppercase; font-weight: 400; flex-shrink: 0; }
   .lineups-back-btn { margin-bottom: 14px; }
   .lineups-empty { text-align: center; color: var(--ink-dim); font-size: 13px; padding: 30px 10px; }
   .lineup-rows-full { border-radius: 8px; }
@@ -1639,7 +1643,7 @@ function renderLineupCard(era, team) {
     else ratings = chipHtml(w.rating, w.skill);
     return `<div class="lineup-player-row">
       <span class="lineup-player-num">${i + 1}</span>
-      <span class="lineup-player-name">${p}${nationalityTagHtml(p)}<span class="lineup-player-role">${d.role}</span></span>
+      <span class="lineup-player-name"><span class="lineup-player-name-text">${p}</span>${nationalityTagHtml(p)}<span class="lineup-player-role">${d.role}</span></span>
       <span class="rating-group">${ratings}</span>
     </div>`;
   }).join('');
