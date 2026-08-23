@@ -402,7 +402,7 @@
   }
   .player-card {
     display: flex; align-items: center; gap: 10px; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.08)), var(--card);
-    border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px;
+    border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; overflow: visible;
     font-family: 'Inter', sans-serif; font-size: 12.5px;
     transition: border-color 0.12s, box-shadow 0.12s;
   }
@@ -451,9 +451,9 @@
   .skill-gold { color: var(--gold) !important; opacity: 1 !important; font-weight: 700; }
   .skill-silver { color: var(--silver) !important; opacity: 1 !important; font-weight: 700; }
 
-  .tier-95 { background: linear-gradient(180deg, rgba(255,183,3,0.22), rgba(255,183,3,0.08)); border-color: var(--gold); color: var(--gold); box-shadow: 0 0 10px rgba(255,183,3,0.35); }
-  .tier-90 { background: linear-gradient(180deg, rgba(207,216,220,0.20), rgba(207,216,220,0.06)); border-color: var(--silver); color: var(--silver); box-shadow: 0 0 8px rgba(207,216,220,0.25); }
-  .tier-85 { background: linear-gradient(180deg, rgba(205,138,77,0.22), rgba(205,138,77,0.08)); border-color: var(--bronze); color: var(--bronze); box-shadow: 0 0 8px rgba(205,138,77,0.22); }
+  .tier-95 { background: linear-gradient(180deg, rgba(255,183,3,0.22), rgba(255,183,3,0.08)); border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 1px rgba(255,183,3,0.35), 0 0 6px 0 rgba(255,183,3,0.3); }
+  .tier-90 { background: linear-gradient(180deg, rgba(207,216,220,0.20), rgba(207,216,220,0.06)); border-color: var(--silver); color: var(--silver); box-shadow: 0 0 0 1px rgba(207,216,220,0.25), 0 0 6px 0 rgba(207,216,220,0.2); }
+  .tier-85 { background: linear-gradient(180deg, rgba(205,138,77,0.22), rgba(205,138,77,0.08)); border-color: var(--bronze); color: var(--bronze); box-shadow: 0 0 0 1px rgba(205,138,77,0.22), 0 0 6px 0 rgba(205,138,77,0.18); }
 
   .empty-note { text-align: center; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--ink-dim); padding: 20px 0; }
 
