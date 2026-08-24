@@ -336,6 +336,8 @@
   .player-row:last-child { border-bottom: none; }
   .player-name { color: var(--ink); }
   .rating-group { display: flex; gap: 6px; flex-shrink: 0; justify-content: flex-end; min-width: 106px; }
+  .rating-group-fixed { justify-content: flex-start; }
+  .chip-slot-empty { display: inline-block; width: 50px; flex-shrink: 0; }
   .squad-builder-bar {
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
     margin: 12px 0 14px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: 10px; border: 1px solid var(--line);
@@ -1656,14 +1658,18 @@ function renderLineupCard(era, team) {
   const rows = list.map((p, i) => {
     const d = DATA.playerDetail[p];
     const b = d.bat, w = d.bowl;
-    let ratings = '';
-    if (b && w) ratings = chipHtml(b.rating, b.skill) + chipHtml(w.rating, w.skill);
-    else if (b) ratings = chipHtml(b.rating, b.skill);
-    else ratings = chipHtml(w.rating, w.skill);
+    // Fixed two-slot layout: batting rating always left, bowling rating
+    // always right. An empty placeholder holds the slot's width when a
+    // player has no rating in that discipline, so the two columns of
+    // numbers line up consistently down the whole XI regardless of role.
+    const batSlot = b ? chipHtml(b.rating, b.skill) : `<span class="chip-slot-empty"></span>`;
+    const bowlSlot = w ? chipHtml(w.rating, w.skill) : `<span class="chip-slot-empty"></span>`;
+    const natStyle = NATION_STYLE[getPlayerNationality(p)];
+    const nameColor = natStyle ? natStyle.accent : 'var(--ink)';
     return `<div class="lineup-player-row">
       <span class="lineup-player-num">${i + 1}</span>
-      <span class="lineup-player-name"><span class="lineup-player-name-text">${p}</span>${nationalityTagHtml(p)}<span class="lineup-player-role">${abbreviateRole(d.role)}</span></span>
-      <span class="rating-group">${ratings}</span>
+      <span class="lineup-player-name"><span class="lineup-player-name-text" style="color:${nameColor};">${p}</span></span>
+      <span class="rating-group rating-group-fixed">${batSlot}${bowlSlot}</span>
     </div>`;
   }).join('');
 
