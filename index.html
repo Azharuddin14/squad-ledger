@@ -91,7 +91,7 @@
     display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap;
   }
   .lineup-player-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .lineup-player-role { color: var(--ink-dim); font-size: 9px; text-transform: uppercase; font-weight: 400; flex-shrink: 0; }
+  .lineup-player-role { color: var(--ink-dim); font-size: 9px; text-transform: uppercase; font-weight: 400; flex-shrink: 0; white-space: nowrap; }
   .lineups-back-btn { margin-bottom: 14px; }
   .lineups-empty { text-align: center; color: var(--ink-dim); font-size: 13px; padding: 30px 10px; }
   .lineup-rows-full { border-radius: 8px; }
@@ -419,10 +419,10 @@
   }
   .card-drag-handle:active { cursor: grabbing; background: rgba(75,145,99,0.15); }
   .card-body { flex: 1 1 auto; min-width: 0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
-  .card-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .card-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; flex: 1 1 auto; min-width: 0; }
   .card-name-line { display: flex; align-items: center; gap: 5px; min-width: 0; }
-  .card-from-tag { color: var(--ink-dim); font-size: 10px; }
-  .card-loan-tag { color: #d9a441; font-size: 10px; font-weight: 700; }
+  .card-from-tag { color: var(--ink-dim); font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+  .card-loan-tag { color: #d9a441; font-size: 10px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
   .player-card-loaned { border-color: rgba(217,164,65,0.4); }
   .card-order-num {
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
