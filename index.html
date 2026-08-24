@@ -232,6 +232,7 @@
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     padding: 20px 22px; margin-top: 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.4);
     transition: background 0.25s, border-color 0.25s;
+    overflow-x: hidden;
   }
   .panel-header {
     display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;
@@ -376,7 +377,7 @@
     padding: 1px 9px; font-size: 10px; font-weight: 700;
   }
   .dnd-zone-body {
-    display: flex; flex-direction: column; gap: 7px; max-height: 380px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 7px; max-height: 380px; overflow-y: auto; overflow-x: hidden;
     -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
     padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--turf-light) transparent;
   }
@@ -406,7 +407,7 @@
   }
   .player-card {
     display: flex; align-items: center; gap: 10px; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.08)), var(--card);
-    border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; overflow: visible;
+    border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px;
     min-height: 46px;
     font-family: 'Inter', sans-serif; font-size: 12.5px;
     transition: border-color 0.12s, box-shadow 0.12s;
@@ -457,9 +458,9 @@
   .skill-gold { color: var(--gold) !important; opacity: 1 !important; font-weight: 700; }
   .skill-silver { color: var(--silver) !important; opacity: 1 !important; font-weight: 700; }
 
-  .tier-95 { background: linear-gradient(180deg, rgba(255,183,3,0.22), rgba(255,183,3,0.08)); border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 1px rgba(255,183,3,0.35), 0 0 6px 0 rgba(255,183,3,0.3); }
-  .tier-90 { background: linear-gradient(180deg, rgba(207,216,220,0.20), rgba(207,216,220,0.06)); border-color: var(--silver); color: var(--silver); box-shadow: 0 0 0 1px rgba(207,216,220,0.25), 0 0 6px 0 rgba(207,216,220,0.2); }
-  .tier-85 { background: linear-gradient(180deg, rgba(205,138,77,0.22), rgba(205,138,77,0.08)); border-color: var(--bronze); color: var(--bronze); box-shadow: 0 0 0 1px rgba(205,138,77,0.22), 0 0 6px 0 rgba(205,138,77,0.18); }
+  .tier-95 { background: linear-gradient(180deg, rgba(255,183,3,0.22), rgba(255,183,3,0.08)); border: 1.5px solid var(--gold); color: var(--gold); }
+  .tier-90 { background: linear-gradient(180deg, rgba(207,216,220,0.20), rgba(207,216,220,0.06)); border: 1.5px solid var(--silver); color: var(--silver); }
+  .tier-85 { background: linear-gradient(180deg, rgba(205,138,77,0.22), rgba(205,138,77,0.08)); border: 1.5px solid var(--bronze); color: var(--bronze); }
 
   .empty-note { text-align: center; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--ink-dim); padding: 20px 0; }
 
@@ -1628,6 +1629,11 @@ function renderLineupsList() {
   });
 }
 
+function abbreviateRole(role) {
+  const map = { 'Batsman': 'BAT', 'Bowler': 'BOWL', 'All-rounder': 'AR' };
+  return map[role] || role;
+}
+
 function renderLineupCard(era, team) {
   const box = document.getElementById('lineupsBox');
   const list = (manualSquads[era] && manualSquads[era][team]) || [];
@@ -1643,7 +1649,7 @@ function renderLineupCard(era, team) {
     else ratings = chipHtml(w.rating, w.skill);
     return `<div class="lineup-player-row">
       <span class="lineup-player-num">${i + 1}</span>
-      <span class="lineup-player-name"><span class="lineup-player-name-text">${p}</span>${nationalityTagHtml(p)}<span class="lineup-player-role">${d.role}</span></span>
+      <span class="lineup-player-name"><span class="lineup-player-name-text">${p}</span>${nationalityTagHtml(p)}<span class="lineup-player-role">${abbreviateRole(d.role)}</span></span>
       <span class="rating-group">${ratings}</span>
     </div>`;
   }).join('');
