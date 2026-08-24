@@ -146,6 +146,11 @@
   .ltr-top strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .ltr-bottom { color: var(--ink-dim); font-size: 11px; margin-top: 3px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
   .ltr-bottom .ltr-chunk { white-space: nowrap; }
+  .ltr-from-to { margin-top: 3px; }
+  .ltr-line {
+    color: var(--ink-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ltr-team { color: var(--ink); font-weight: 600; }
   .ltr-nat {
     font-size: 9px; font-weight: 700; border: 1px solid; border-radius: 4px; padding: 1px 5px;
     line-height: 1.4; flex-shrink: 0;
@@ -1579,7 +1584,10 @@ function renderTransfersSubView(era) {
     return `<div class="lineups-transfer-row">
       <div class="ltr-main">
         <div class="ltr-top"><strong>${t.player}</strong>${nationalityTagHtml(t.player)}</div>
-        <div class="ltr-bottom"><span class="ltr-chunk">${t.from} &rarr;</span> <span class="ltr-chunk" style="color:${toStyle.accent || '#d9a441'}; font-weight:700;">${t.to}</span></div>
+        <div class="ltr-from-to">
+          <div class="ltr-line">From: <span class="ltr-team">${t.from}</span></div>
+          <div class="ltr-line">To: <span class="ltr-team" style="color:${toStyle.accent || '#d9a441'}; font-weight:700;">${t.to}</span></div>
+        </div>
         <div class="ltr-second">2nd: ${second || '&mdash;'}</div>
       </div>
       <span class="rating-group">${playerRatingsHtml(t.player)}</span>
