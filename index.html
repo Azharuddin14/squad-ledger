@@ -136,20 +136,23 @@
   }
   .lineups-summary-empty { color: var(--ink-dim); font-size: 12px; font-style: italic; padding: 6px 0; }
   .lineups-transfer-row, .lineups-squad-row {
-    font-family: 'Inter', sans-serif; font-size: 12px; color: var(--ink); padding: 7px 0;
+    font-family: 'Inter', sans-serif; font-size: 12px; color: var(--ink); padding: 8px 0;
     border-bottom: 1px solid rgba(31,59,44,0.35);
+    display: flex; align-items: center; gap: 10px;
   }
   .lineups-transfer-row:last-child, .lineups-squad-row:last-child { border-bottom: none; }
-  .ltr-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ltr-main { flex: 1 1 auto; min-width: 0; }
+  .ltr-top { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+  .ltr-top strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .ltr-bottom { color: var(--ink-dim); font-size: 11px; margin-top: 3px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
   .ltr-bottom .ltr-chunk { white-space: nowrap; }
   .ltr-nat {
     font-size: 9px; font-weight: 700; border: 1px solid; border-radius: 4px; padding: 1px 5px;
     line-height: 1.4; flex-shrink: 0;
   }
-  .lineups-second-tag {
-    color: var(--ink-dim); font-size: 10px; background: rgba(75,145,99,0.12); border-radius: 5px;
-    padding: 1px 6px; white-space: nowrap;
+  .ltr-second {
+    color: var(--ink-dim); font-size: 10px; margin-top: 3px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
   }
   .masthead .eyebrow {
     font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.25em;
@@ -1573,10 +1576,13 @@ function renderTransfersSubView(era) {
   return transfers.map(t => {
     const toStyle = NATION_STYLE[DATA.teamNation[t.to]] || {};
     const second = getSecondTeamForEra(era, t.player, t.from);
-    const secondHtml = second ? `<span class="lineups-second-tag">2nd: ${second}</span>` : '';
     return `<div class="lineups-transfer-row">
-      <div class="ltr-top"><strong>${t.player}</strong>${nationalityTagHtml(t.player)}<span class="rating-group">${playerRatingsHtml(t.player)}</span></div>
-      <div class="ltr-bottom"><span class="ltr-chunk">${t.from} &rarr;</span> <span class="ltr-chunk" style="color:${toStyle.accent || '#d9a441'}; font-weight:700;">${t.to}</span>${secondHtml}</div>
+      <div class="ltr-main">
+        <div class="ltr-top"><strong>${t.player}</strong>${nationalityTagHtml(t.player)}</div>
+        <div class="ltr-bottom"><span class="ltr-chunk">${t.from} &rarr;</span> <span class="ltr-chunk" style="color:${toStyle.accent || '#d9a441'}; font-weight:700;">${t.to}</span></div>
+        <div class="ltr-second">2nd: ${second || '&mdash;'}</div>
+      </div>
+      <span class="rating-group">${playerRatingsHtml(t.player)}</span>
     </div>`;
   }).join('');
 }
@@ -1589,10 +1595,13 @@ function renderUnutilizedSubView(era) {
   return list.map(u => {
     const style = NATION_STYLE[DATA.teamNation[u.team]] || {};
     const second = getSecondTeamForEra(era, u.player, u.team);
-    const secondHtml = second ? `<span class="lineups-second-tag">2nd: ${second}</span>` : '';
     return `<div class="lineups-transfer-row">
-      <div class="ltr-top"><strong>${u.player}</strong>${nationalityTagHtml(u.player)}<span class="rating-group">${playerRatingsHtml(u.player)}</span></div>
-      <div class="ltr-bottom"><span class="ltr-chunk">${u.role} &middot;</span> <span class="ltr-chunk" style="color:${style.accent || 'var(--ink-dim)'};">${u.team}</span>${secondHtml}</div>
+      <div class="ltr-main">
+        <div class="ltr-top"><strong>${u.player}</strong>${nationalityTagHtml(u.player)}</div>
+        <div class="ltr-bottom"><span class="ltr-chunk">${u.role} &middot;</span> <span class="ltr-chunk" style="color:${style.accent || 'var(--ink-dim)'};">${u.team}</span></div>
+        <div class="ltr-second">2nd: ${second || '&mdash;'}</div>
+      </div>
+      <span class="rating-group">${playerRatingsHtml(u.player)}</span>
     </div>`;
   }).join('');
 }
