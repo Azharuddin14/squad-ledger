@@ -639,10 +639,19 @@ const REAL_NATIONAL = {"PR Stirling": {"nation": "IRE", "span": "2009-2026", "ma
 const NATION_STYLE = {
   'IND': { accent: '#1f5fd6', bg: 'radial-gradient(ellipse at top, rgba(31,95,214,0.16), var(--card) 65%)', label: 'India' },
   'ENG': { accent: '#5b8fd6', bg: 'radial-gradient(ellipse at top, rgba(91,143,214,0.14), var(--card) 65%)', label: 'England' },
-  'SA':  { accent: '#ffb612', bg: 'radial-gradient(ellipse at top, rgba(0,119,73,0.20), var(--card) 65%)', label: 'South Africa' },
+  'SA':  { accent: '#8bd17c', bg: 'radial-gradient(ellipse at top, rgba(0,119,73,0.20), var(--card) 65%)', label: 'South Africa' },
   'WI':  { accent: '#c8783a', bg: 'radial-gradient(ellipse at top, rgba(122,0,25,0.22), var(--card) 65%)', label: 'West Indies / Caribbean' },
   'PAK': { accent: '#3fae5a', bg: 'radial-gradient(ellipse at top, rgba(1,65,28,0.28), var(--card) 65%)', label: 'Pakistan' },
   'AUS': { accent: '#f5c518', bg: 'radial-gradient(ellipse at top, rgba(0,106,78,0.22), var(--card) 65%)', label: 'Australia' },
+  // Nations without their own club in the 22-team league, but whose players
+  // still appear (via international careers) — colored so their nationality
+  // tag/name-tint isn't just plain white like an unrecognized code.
+  'NZ':  { accent: '#9099a2', bg: 'radial-gradient(ellipse at top, rgba(120,130,140,0.16), var(--card) 65%)', label: 'New Zealand' },
+  'SL':  { accent: '#4169e1', bg: 'radial-gradient(ellipse at top, rgba(65,105,225,0.16), var(--card) 65%)', label: 'Sri Lanka' },
+  'AFG': { accent: '#5c7891', bg: 'radial-gradient(ellipse at top, rgba(92,120,145,0.16), var(--card) 65%)', label: 'Afghanistan' },
+  'BAN': { accent: '#1f7a4d', bg: 'radial-gradient(ellipse at top, rgba(31,122,77,0.16), var(--card) 65%)', label: 'Bangladesh' },
+  'IRE': { accent: '#d98a3d', bg: 'radial-gradient(ellipse at top, rgba(217,138,61,0.16), var(--card) 65%)', label: 'Ireland' },
+  'ZIM': { accent: '#c9a227', bg: 'radial-gradient(ellipse at top, rgba(201,162,39,0.16), var(--card) 65%)', label: 'Zimbabwe' },
 };
 
 const ALL_TEAMS = Object.keys(DATA.teamNation).sort((a,b) => a.localeCompare(b));
