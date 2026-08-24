@@ -856,21 +856,15 @@ function renderTeamPanel() {
 
     const fromTag = opts.fromTeam ? `<span class="card-from-tag">from ${opts.fromTeam}</span>` : '';
     const loanTag = opts.loanedFrom ? `<span class="card-loan-tag">&#9679; on loan from ${opts.loanedFrom}</span>` : '';
-    const natTag = nationalityTagHtml(p);
     const orderNum = opts.inXi ? `<span class="card-order-num">${opts.position}</span>` : '';
-    const reorderBtns = opts.inXi ? `
-      <div class="card-order-stack">
-        <button class="card-order-btn" data-player="${p}" data-dir="up" ${opts.isFirst ? 'disabled' : ''}>&#9650;</button>
-        <button class="card-order-btn" data-player="${p}" data-dir="down" ${opts.isLast ? 'disabled' : ''}>&#9660;</button>
-      </div>` : '';
-    // Nationality is already conveyed clearly via the small tag next to the
-    // name — a colored left border on every card as well made the whole list
-    // look busy/striped, so that's intentionally left out here.
+    // Reorder buttons and the nationality tag were eating too much of the row's
+    // width, pushing ratings/info off-screen on narrower phones. Reordering
+    // within the XI is still available via drag-and-drop, so removing the
+    // dedicated up/down buttons costs nothing functionally.
     return `<div class="player-card ${opts.loanedFrom ? 'player-card-loaned' : ''}" data-player="${p}">
       ${orderNum}
       <div class="card-drag-handle">&#8942;&#8942;</div>
-      <div class="card-body" data-player="${p}"><span class="card-name-line"><span class="card-name">${p}</span>${natTag}</span>${fromTag}${loanTag}</div>
-      ${reorderBtns}
+      <div class="card-body" data-player="${p}"><span class="card-name-line"><span class="card-name">${p}</span></span>${fromTag}${loanTag}</div>
       <span class="rating-group">${ratings}</span>
       <button class="card-info-btn" data-player="${p}" title="View details">&#9432;</button>
     </div>`;
