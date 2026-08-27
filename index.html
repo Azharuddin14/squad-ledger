@@ -101,8 +101,9 @@
   .lineups-subtabs {
     display: flex; gap: 6px; margin: 4px 0 14px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 4px;
   }
+  .lineups-subtabs-wrap { flex-wrap: wrap; }
   .lineups-subtab-btn {
-    flex: 1 1 0; font-family: 'Inter', sans-serif; font-size: 11px; text-transform: uppercase;
+    flex: 1 1 30%; min-width: 90px; font-family: 'Inter', sans-serif; font-size: 11px; text-transform: uppercase;
     letter-spacing: 0.04em; padding: 8px 6px; border-radius: 6px; background: transparent; border: none;
     color: var(--ink-dim); cursor: pointer; font-weight: 700;
   }
@@ -1454,8 +1455,11 @@ function eraTabsHtml(activeEra) {
 }
 
 function subTabsHtml(active) {
-  const tabs = [['squads', 'Squads'], ['transfers', 'Transfers'], ['unutilized', 'Unutilized']];
-  return `<div class="lineups-subtabs">
+  const tabs = [
+    ['squads', 'Squads'], ['transfers', 'Transfers'], ['unutilized', 'Unutilized'],
+    ['additions', 'Additions'], ['missed', 'Missed'], ['moved', 'Moved Teams'],
+  ];
+  return `<div class="lineups-subtabs lineups-subtabs-wrap">
     ${tabs.map(([id, label]) => `<button class="lineups-subtab-btn ${active===id?'active':''}" data-sub="${id}">${label}</button>`).join('')}
   </div>`;
 }
@@ -1524,6 +1528,62 @@ function getEraUnutilized(era) {
     if (maxR >= 85) results.push({ player, team: winnerMap[player], rating: maxR, role: d.role });
   }
   results.sort((a, b) => b.rating - a.rating || a.player.localeCompare(b.player));
+  return results;
+}
+
+// --- Era-over-era roster comparison (Additions / Missed / Moved Teams) ---
+// Unlike Transfers/Unutilized above, these compare the underlying native
+// player pool between two consecutive eras directly — no manual squad
+// building required, since this is about how the league itself changed.
+
+function getPreviousEra(era) {
+  const eras = DATA.overview.eras;
+  const idx = eras.indexOf(era);
+  return idx > 0 ? eras[idx - 1] : null;
+}
+
+function getEraAdditions(era) {
+  const prevEra = getPreviousEra(era);
+  if (!prevEra) return [];
+  const curMap = buildWinnerTeamMap(era);
+  const prevMap = buildWinnerTeamMap(prevEra);
+  const results = [];
+  for (const player in curMap) {
+    if (!(player in prevMap)) {
+      results.push({ player, team: curMap[player] });
+    }
+  }
+  results.sort((a, b) => a.player.localeCompare(b.player));
+  return results;
+}
+
+function getEraMissed(era) {
+  const prevEra = getPreviousEra(era);
+  if (!prevEra) return [];
+  const curMap = buildWinnerTeamMap(era);
+  const prevMap = buildWinnerTeamMap(prevEra);
+  const results = [];
+  for (const player in prevMap) {
+    if (!(player in curMap)) {
+      results.push({ player, team: prevMap[player] });
+    }
+  }
+  results.sort((a, b) => a.player.localeCompare(b.player));
+  return results;
+}
+
+function getEraMoved(era) {
+  const prevEra = getPreviousEra(era);
+  if (!prevEra) return [];
+  const curMap = buildWinnerTeamMap(era);
+  const prevMap = buildWinnerTeamMap(prevEra);
+  const results = [];
+  for (const player in curMap) {
+    if (player in prevMap && prevMap[player] !== curMap[player]) {
+      results.push({ player, from: prevMap[player], to: curMap[player] });
+    }
+  }
+  results.sort((a, b) => a.player.localeCompare(b.player));
   return results;
 }
 
@@ -1625,6 +1685,68 @@ function renderUnutilizedSubView(era) {
   }).join('');
 }
 
+function eraCompareEmptyState(era, label) {
+  const prevEra = getPreviousEra(era);
+  if (!prevEra) {
+    return `<div class="lineups-summary-empty">ERA ${ERA_LABELS[era]} is the earliest era — there's no previous era to compare against.</div>`;
+  }
+  return `<div class="lineups-summary-empty">No ${label} between ERA ${ERA_LABELS[prevEra]} and ERA ${ERA_LABELS[era]}.</div>`;
+}
+
+function renderAdditionsSubView(era) {
+  const list = getEraAdditions(era);
+  if (list.length === 0) return eraCompareEmptyState(era, 'new additions');
+  const prevEra = getPreviousEra(era);
+  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">New to the pool in ERA ${ERA_LABELS[era]} (weren't eligible in ERA ${ERA_LABELS[prevEra]}):</div>` +
+    list.map(a => {
+      const style = NATION_STYLE[DATA.teamNation[a.team]] || {};
+      return `<div class="lineups-transfer-row">
+        <div class="ltr-main">
+          <div class="ltr-top"><strong>${a.player}</strong>${nationalityTagHtml(a.player)}</div>
+          <div class="ltr-bottom"><span class="ltr-chunk">Team:</span> <span class="ltr-chunk" style="color:${style.accent || 'var(--ink-dim)'};">${a.team}</span></div>
+        </div>
+        <span class="rating-group">${playerRatingsHtml(a.player)}</span>
+      </div>`;
+    }).join('');
+}
+
+function renderMissedSubView(era) {
+  const list = getEraMissed(era);
+  if (list.length === 0) return eraCompareEmptyState(era, 'attrition');
+  const prevEra = getPreviousEra(era);
+  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">In the pool in ERA ${ERA_LABELS[prevEra]}, no longer eligible by ERA ${ERA_LABELS[era]}:</div>` +
+    list.map(m => {
+      const style = NATION_STYLE[DATA.teamNation[m.team]] || {};
+      return `<div class="lineups-transfer-row">
+        <div class="ltr-main">
+          <div class="ltr-top"><strong>${m.player}</strong>${nationalityTagHtml(m.player)}</div>
+          <div class="ltr-bottom"><span class="ltr-chunk">Last with:</span> <span class="ltr-chunk" style="color:${style.accent || 'var(--ink-dim)'};">${m.team}</span> <span class="ltr-chunk">(ERA ${ERA_LABELS[prevEra]})</span></div>
+        </div>
+        <span class="rating-group">${playerRatingsHtml(m.player)}</span>
+      </div>`;
+    }).join('');
+}
+
+function renderMovedSubView(era) {
+  const list = getEraMoved(era);
+  if (list.length === 0) return eraCompareEmptyState(era, 'cross-team moves');
+  const prevEra = getPreviousEra(era);
+  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">Same player, different team vs ERA ${ERA_LABELS[prevEra]}:</div>` +
+    list.map(mv => {
+      const toStyle = NATION_STYLE[DATA.teamNation[mv.to]] || {};
+      return `<div class="lineups-transfer-row">
+        <div class="ltr-main">
+          <div class="ltr-top"><strong>${mv.player}</strong>${nationalityTagHtml(mv.player)}</div>
+          <div class="ltr-from-to">
+            <div class="ltr-line">${ERA_LABELS[prevEra]}: <span class="ltr-team">${mv.from}</span></div>
+            <div class="ltr-line">${ERA_LABELS[era]}: <span class="ltr-team" style="color:${toStyle.accent || '#d9a441'}; font-weight:700;">${mv.to}</span></div>
+          </div>
+        </div>
+        <span class="rating-group">${playerRatingsHtml(mv.player)}</span>
+      </div>`;
+    }).join('');
+}
+
 function renderLineupsList() {
   const era = lineupsViewEra || currentEra;
   const box = document.getElementById('lineupsBox');
@@ -1632,6 +1754,9 @@ function renderLineupsList() {
   let subContent;
   if (lineupsSubView === 'transfers') subContent = renderTransfersSubView(era);
   else if (lineupsSubView === 'unutilized') subContent = renderUnutilizedSubView(era);
+  else if (lineupsSubView === 'additions') subContent = renderAdditionsSubView(era);
+  else if (lineupsSubView === 'missed') subContent = renderMissedSubView(era);
+  else if (lineupsSubView === 'moved') subContent = renderMovedSubView(era);
   else subContent = renderSquadsSubView(era);
 
   box.innerHTML = `<h3>Saved Lineups</h3>
