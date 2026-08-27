@@ -1542,11 +1542,23 @@ function getPreviousEra(era) {
   return idx > 0 ? eras[idx - 1] : null;
 }
 
+// Maps player -> team using only players actually placed in a SAVED Starting XI
+// for that era (manualSquads), not the full native eligibility pool. This is
+// the "layer on top of your Starting XIs" the comparisons below are built on.
+function buildSavedXiMap(era) {
+  const map = {};
+  const squads = manualSquads[era] || {};
+  for (const team in squads) {
+    (squads[team] || []).forEach(p => { map[p] = team; });
+  }
+  return map;
+}
+
 function getEraAdditions(era) {
   const prevEra = getPreviousEra(era);
   if (!prevEra) return [];
-  const curMap = buildWinnerTeamMap(era);
-  const prevMap = buildWinnerTeamMap(prevEra);
+  const curMap = buildSavedXiMap(era);
+  const prevMap = buildSavedXiMap(prevEra);
   const results = [];
   for (const player in curMap) {
     if (!(player in prevMap)) {
@@ -1560,8 +1572,8 @@ function getEraAdditions(era) {
 function getEraMissed(era) {
   const prevEra = getPreviousEra(era);
   if (!prevEra) return [];
-  const curMap = buildWinnerTeamMap(era);
-  const prevMap = buildWinnerTeamMap(prevEra);
+  const curMap = buildSavedXiMap(era);
+  const prevMap = buildSavedXiMap(prevEra);
   const results = [];
   for (const player in prevMap) {
     if (!(player in curMap)) {
@@ -1575,8 +1587,8 @@ function getEraMissed(era) {
 function getEraMoved(era) {
   const prevEra = getPreviousEra(era);
   if (!prevEra) return [];
-  const curMap = buildWinnerTeamMap(era);
-  const prevMap = buildWinnerTeamMap(prevEra);
+  const curMap = buildSavedXiMap(era);
+  const prevMap = buildSavedXiMap(prevEra);
   const results = [];
   for (const player in curMap) {
     if (player in prevMap && prevMap[player] !== curMap[player]) {
@@ -1690,14 +1702,14 @@ function eraCompareEmptyState(era, label) {
   if (!prevEra) {
     return `<div class="lineups-summary-empty">ERA ${ERA_LABELS[era]} is the earliest era — there's no previous era to compare against.</div>`;
   }
-  return `<div class="lineups-summary-empty">No ${label} between ERA ${ERA_LABELS[prevEra]} and ERA ${ERA_LABELS[era]}.</div>`;
+  return `<div class="lineups-summary-empty">No ${label} between your saved Starting XIs in ERA ${ERA_LABELS[prevEra]} and ERA ${ERA_LABELS[era]}. Build some Starting XIs in both eras to see a comparison here.</div>`;
 }
 
 function renderAdditionsSubView(era) {
   const list = getEraAdditions(era);
   if (list.length === 0) return eraCompareEmptyState(era, 'new additions');
   const prevEra = getPreviousEra(era);
-  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">New to the pool in ERA ${ERA_LABELS[era]} (weren't eligible in ERA ${ERA_LABELS[prevEra]}):</div>` +
+  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">In a saved Starting XI for ERA ${ERA_LABELS[era]}, but weren't in any saved XI in ERA ${ERA_LABELS[prevEra]}:</div>` +
     list.map(a => {
       const style = NATION_STYLE[DATA.teamNation[a.team]] || {};
       return `<div class="lineups-transfer-row">
@@ -1712,9 +1724,9 @@ function renderAdditionsSubView(era) {
 
 function renderMissedSubView(era) {
   const list = getEraMissed(era);
-  if (list.length === 0) return eraCompareEmptyState(era, 'attrition');
+  if (list.length === 0) return eraCompareEmptyState(era, 'dropped players');
   const prevEra = getPreviousEra(era);
-  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">In the pool in ERA ${ERA_LABELS[prevEra]}, no longer eligible by ERA ${ERA_LABELS[era]}:</div>` +
+  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">Were in a saved Starting XI for ERA ${ERA_LABELS[prevEra]}, but not in any saved XI by ERA ${ERA_LABELS[era]}:</div>` +
     list.map(m => {
       const style = NATION_STYLE[DATA.teamNation[m.team]] || {};
       return `<div class="lineups-transfer-row">
@@ -1731,7 +1743,7 @@ function renderMovedSubView(era) {
   const list = getEraMoved(era);
   if (list.length === 0) return eraCompareEmptyState(era, 'cross-team moves');
   const prevEra = getPreviousEra(era);
-  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">Same player, different team vs ERA ${ERA_LABELS[prevEra]}:</div>` +
+  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">In a saved Starting XI for a different team vs ERA ${ERA_LABELS[prevEra]}:</div>` +
     list.map(mv => {
       const toStyle = NATION_STYLE[DATA.teamNation[mv.to]] || {};
       return `<div class="lineups-transfer-row">
