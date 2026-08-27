@@ -136,6 +136,17 @@
     color: var(--turf-light); margin: 0 0 8px;
   }
   .lineups-summary-empty { color: var(--ink-dim); font-size: 12px; font-style: italic; padding: 6px 0; }
+  .team-changes-block {
+    margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+  }
+  .team-changes-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .team-changes-header {
+    font-family: 'Teko', sans-serif; font-size: 20px; font-weight: 600; margin-bottom: 6px;
+  }
+  .tc-subhead {
+    font-family: 'Inter', sans-serif; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-dim); margin: 10px 0 4px;
+  }
   .lineups-transfer-row, .lineups-squad-row {
     font-family: 'Inter', sans-serif; font-size: 12px; color: var(--ink); padding: 8px 0;
     border-bottom: 1px solid rgba(31,59,44,0.35);
@@ -1457,7 +1468,7 @@ function eraTabsHtml(activeEra) {
 function subTabsHtml(active) {
   const tabs = [
     ['squads', 'Squads'], ['transfers', 'Transfers'], ['unutilized', 'Unutilized'],
-    ['additions', 'Additions'], ['missed', 'Missed'], ['moved', 'Moved Teams'],
+    ['teamchanges', 'Team Changes'],
   ];
   return `<div class="lineups-subtabs lineups-subtabs-wrap">
     ${tabs.map(([id, label]) => `<button class="lineups-subtab-btn ${active===id?'active':''}" data-sub="${id}">${label}</button>`).join('')}
@@ -1554,48 +1565,44 @@ function buildSavedXiMap(era) {
   return map;
 }
 
-function getEraAdditions(era) {
+// Team-grouped comparison of saved Starting XIs between this era and the
+// previous one. For each team that has a saved squad in either era, splits
+// the changes into four buckets:
+//  - additions:  new to ANY saved XI, and now on this team
+//  - attrition:  were on this team, now not in ANY saved XI
+//  - movedIn:    were on a DIFFERENT team's saved XI, now on this team
+//  - movedOut:   were on this team, now on a DIFFERENT team's saved XI
+function getTeamEraChanges(era) {
   const prevEra = getPreviousEra(era);
   if (!prevEra) return [];
   const curMap = buildSavedXiMap(era);
   const prevMap = buildSavedXiMap(prevEra);
-  const results = [];
-  for (const player in curMap) {
-    if (!(player in prevMap)) {
-      results.push({ player, team: curMap[player] });
-    }
-  }
-  results.sort((a, b) => a.team.localeCompare(b.team) || a.player.localeCompare(b.player));
-  return results;
-}
+  const curSquads = manualSquads[era] || {};
+  const prevSquads = manualSquads[prevEra] || {};
 
-function getEraMissed(era) {
-  const prevEra = getPreviousEra(era);
-  if (!prevEra) return [];
-  const curMap = buildSavedXiMap(era);
-  const prevMap = buildSavedXiMap(prevEra);
+  const teams = new Set([...Object.keys(curSquads), ...Object.keys(prevSquads)]);
   const results = [];
-  for (const player in prevMap) {
-    if (!(player in curMap)) {
-      results.push({ player, team: prevMap[player] });
-    }
-  }
-  results.sort((a, b) => a.team.localeCompare(b.team) || a.player.localeCompare(b.player));
-  return results;
-}
 
-function getEraMoved(era) {
-  const prevEra = getPreviousEra(era);
-  if (!prevEra) return [];
-  const curMap = buildSavedXiMap(era);
-  const prevMap = buildSavedXiMap(prevEra);
-  const results = [];
-  for (const player in curMap) {
-    if (player in prevMap && prevMap[player] !== curMap[player]) {
-      results.push({ player, from: prevMap[player], to: curMap[player] });
+  teams.forEach(team => {
+    const curXi = curSquads[team] || [];
+    const prevXi = prevSquads[team] || [];
+    const additions = [], attrition = [], movedIn = [], movedOut = [];
+
+    curXi.forEach(p => {
+      if (!(p in prevMap)) additions.push({ player: p });
+      else if (prevMap[p] !== team) movedIn.push({ player: p, from: prevMap[p] });
+    });
+    prevXi.forEach(p => {
+      if (!(p in curMap)) attrition.push({ player: p });
+      else if (curMap[p] !== team) movedOut.push({ player: p, to: curMap[p] });
+    });
+
+    if (additions.length || attrition.length || movedIn.length || movedOut.length) {
+      results.push({ team, additions, attrition, movedIn, movedOut });
     }
-  }
-  results.sort((a, b) => a.from.localeCompare(b.from) || a.player.localeCompare(b.player));
+  });
+
+  results.sort((a, b) => a.team.localeCompare(b.team));
   return results;
 }
 
@@ -1697,66 +1704,61 @@ function renderUnutilizedSubView(era) {
   }).join('');
 }
 
-function eraCompareEmptyState(era, label) {
+function eraCompareEmptyState(era) {
   const prevEra = getPreviousEra(era);
   if (!prevEra) {
     return `<div class="lineups-summary-empty">ERA ${ERA_LABELS[era]} is the earliest era — there's no previous era to compare against.</div>`;
   }
-  return `<div class="lineups-summary-empty">No ${label} between your saved Starting XIs in ERA ${ERA_LABELS[prevEra]} and ERA ${ERA_LABELS[era]}. Build some Starting XIs in both eras to see a comparison here.</div>`;
+  return `<div class="lineups-summary-empty">No changes found between your saved Starting XIs in ERA ${ERA_LABELS[prevEra]} and ERA ${ERA_LABELS[era]}. Build some Starting XIs in both eras to see a comparison here.</div>`;
 }
 
-function renderAdditionsSubView(era) {
-  const list = getEraAdditions(era);
-  if (list.length === 0) return eraCompareEmptyState(era, 'new additions');
-  const prevEra = getPreviousEra(era);
-  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">In a saved Starting XI for ERA ${ERA_LABELS[era]}, but weren't in any saved XI in ERA ${ERA_LABELS[prevEra]}:</div>` +
-    list.map(a => {
-      const style = NATION_STYLE[DATA.teamNation[a.team]] || {};
-      return `<div class="lineups-transfer-row">
-        <div class="ltr-main">
-          <div class="ltr-top"><strong>${a.player}</strong>${nationalityTagHtml(a.player)}</div>
-          <div class="ltr-bottom"><span class="ltr-chunk">Team:</span> <span class="ltr-chunk" style="color:${style.accent || 'var(--ink-dim)'};">${a.team}</span></div>
-        </div>
-        <span class="rating-group">${playerRatingsHtml(a.player)}</span>
-      </div>`;
-    }).join('');
+function teamChangeRowHtml(player, note) {
+  return `<div class="lineups-transfer-row">
+    <div class="ltr-main">
+      <div class="ltr-top"><strong>${player}</strong>${nationalityTagHtml(player)}</div>
+      ${note ? `<div class="ltr-bottom">${note}</div>` : ''}
+    </div>
+    <span class="rating-group">${playerRatingsHtml(player)}</span>
+  </div>`;
 }
 
-function renderMissedSubView(era) {
-  const list = getEraMissed(era);
-  if (list.length === 0) return eraCompareEmptyState(era, 'dropped players');
+function renderTeamChangesSubView(era) {
+  const groups = getTeamEraChanges(era);
+  if (groups.length === 0) return eraCompareEmptyState(era);
   const prevEra = getPreviousEra(era);
-  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">Were in a saved Starting XI for ERA ${ERA_LABELS[prevEra]}, but not in any saved XI by ERA ${ERA_LABELS[era]}:</div>` +
-    list.map(m => {
-      const style = NATION_STYLE[DATA.teamNation[m.team]] || {};
-      return `<div class="lineups-transfer-row">
-        <div class="ltr-main">
-          <div class="ltr-top"><strong>${m.player}</strong>${nationalityTagHtml(m.player)}</div>
-          <div class="ltr-bottom"><span class="ltr-chunk">Last with:</span> <span class="ltr-chunk" style="color:${style.accent || 'var(--ink-dim)'};">${m.team}</span> <span class="ltr-chunk">(ERA ${ERA_LABELS[prevEra]})</span></div>
-        </div>
-        <span class="rating-group">${playerRatingsHtml(m.player)}</span>
-      </div>`;
-    }).join('');
-}
 
-function renderMovedSubView(era) {
-  const list = getEraMoved(era);
-  if (list.length === 0) return eraCompareEmptyState(era, 'cross-team moves');
-  const prevEra = getPreviousEra(era);
-  return `<div class="lineups-summary-empty" style="font-style:normal; padding:0 0 10px;">In a saved Starting XI for a different team vs ERA ${ERA_LABELS[prevEra]}:</div>` +
-    list.map(mv => {
-      const toStyle = NATION_STYLE[DATA.teamNation[mv.to]] || {};
-      return `<div class="lineups-transfer-row">
-        <div class="ltr-main">
-          <div class="ltr-top"><strong>${mv.player}</strong>${nationalityTagHtml(mv.player)}</div>
-          <div class="ltr-from-to">
-            <div class="ltr-line">${ERA_LABELS[prevEra]}: <span class="ltr-team">${mv.from}</span></div>
-            <div class="ltr-line">${ERA_LABELS[era]}: <span class="ltr-team" style="color:${toStyle.accent || '#d9a441'}; font-weight:700;">${mv.to}</span></div>
-          </div>
-        </div>
-        <span class="rating-group">${playerRatingsHtml(mv.player)}</span>
-      </div>`;
-    }).join('');
+  return groups.map(g => {
+    const style = NATION_STYLE[DATA.teamNation[g.team]] || {};
+    const sections = [];
+
+    if (g.additions.length) {
+      sections.push(`<div class="tc-subhead">Additions</div>` +
+        g.additions.map(a => teamChangeRowHtml(a.player, `New to any saved XI`)).join(''));
+    }
+    if (g.attrition.length) {
+      sections.push(`<div class="tc-subhead">Attrition</div>` +
+        g.attrition.map(a => teamChangeRowHtml(a.player, `Not in any saved XI by ERA ${ERA_LABELS[era]}`)).join(''));
+    }
+    if (g.movedIn.length) {
+      sections.push(`<div class="tc-subhead">Moved in from other teams</div>` +
+        g.movedIn.map(mv => {
+          const fromStyle = NATION_STYLE[DATA.teamNation[mv.from]] || {};
+          return teamChangeRowHtml(mv.player, `From <span style="color:${fromStyle.accent || 'var(--ink-dim)'}; font-weight:700;">${mv.from}</span> (ERA ${ERA_LABELS[prevEra]})`);
+        }).join(''));
+    }
+    if (g.movedOut.length) {
+      sections.push(`<div class="tc-subhead">Moved out to other teams</div>` +
+        g.movedOut.map(mv => {
+          const toStyle = NATION_STYLE[DATA.teamNation[mv.to]] || {};
+          return teamChangeRowHtml(mv.player, `To <span style="color:${toStyle.accent || 'var(--ink-dim)'}; font-weight:700;">${mv.to}</span> (ERA ${ERA_LABELS[era]})`);
+        }).join(''));
+    }
+
+    return `<div class="team-changes-block">
+      <div class="team-changes-header" style="color:${style.accent || 'var(--ink)'};">${g.team}</div>
+      ${sections.join('')}
+    </div>`;
+  }).join('');
 }
 
 function renderLineupsList() {
@@ -1766,9 +1768,7 @@ function renderLineupsList() {
   let subContent;
   if (lineupsSubView === 'transfers') subContent = renderTransfersSubView(era);
   else if (lineupsSubView === 'unutilized') subContent = renderUnutilizedSubView(era);
-  else if (lineupsSubView === 'additions') subContent = renderAdditionsSubView(era);
-  else if (lineupsSubView === 'missed') subContent = renderMissedSubView(era);
-  else if (lineupsSubView === 'moved') subContent = renderMovedSubView(era);
+  else if (lineupsSubView === 'teamchanges') subContent = renderTeamChangesSubView(era);
   else subContent = renderSquadsSubView(era);
 
   box.innerHTML = `<h3>Saved Lineups</h3>
