@@ -1553,7 +1553,7 @@ function getEraAdditions(era) {
       results.push({ player, team: curMap[player] });
     }
   }
-  results.sort((a, b) => a.player.localeCompare(b.player));
+  results.sort((a, b) => a.team.localeCompare(b.team) || a.player.localeCompare(b.player));
   return results;
 }
 
@@ -1568,7 +1568,7 @@ function getEraMissed(era) {
       results.push({ player, team: prevMap[player] });
     }
   }
-  results.sort((a, b) => a.player.localeCompare(b.player));
+  results.sort((a, b) => a.team.localeCompare(b.team) || a.player.localeCompare(b.player));
   return results;
 }
 
@@ -1583,7 +1583,7 @@ function getEraMoved(era) {
       results.push({ player, from: prevMap[player], to: curMap[player] });
     }
   }
-  results.sort((a, b) => a.player.localeCompare(b.player));
+  results.sort((a, b) => a.from.localeCompare(b.from) || a.player.localeCompare(b.player));
   return results;
 }
 
