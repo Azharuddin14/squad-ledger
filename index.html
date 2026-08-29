@@ -49,8 +49,13 @@
   .lineups-trigger-btn {
     position: absolute; top: 0; right: 0; font-size: 11px; padding: 8px 12px;
   }
+  .backup-restore-row {
+    position: absolute; top: 0; left: 0; display: flex; gap: 6px;
+  }
+  .backup-restore-btn { font-size: 11px; padding: 8px 10px; }
   @media (max-width: 700px) {
     .lineups-trigger-btn { position: static; margin-top: 12px; display: inline-block; }
+    .backup-restore-row { position: static; justify-content: center; margin-top: 10px; }
   }
   .lineups-box {
     max-width: 640px; width: 92vw; max-height: none; overflow: visible;
@@ -611,6 +616,11 @@
     <div class="eyebrow">Cross-League &middot; Cross-Era Analytics</div>
     <h1>SQUAD LEDGER DASHBOARD</h1>
     <button id="openLineupsBtn" class="sb-btn lineups-trigger-btn">&#128220; Saved Lineups</button>
+    <div class="backup-restore-row">
+      <button id="backupBtn" class="sb-btn sb-btn-ghost backup-restore-btn">&#11015;&#65039; Backup</button>
+      <button id="restoreBtn" class="sb-btn sb-btn-ghost backup-restore-btn">&#11014;&#65039; Restore</button>
+      <input type="file" id="restoreFileInput" accept="application/json,.json" style="display:none;">
+    </div>
   </div>
 
   <div class="overview-grid" id="overviewGrid"></div>
@@ -1040,6 +1050,72 @@ function saveManualSquads() {
     window.localStorage.setItem(MANUAL_SQUADS_KEY, JSON.stringify(manualSquads));
   } catch (e) { /* ignore quota/availability errors */ }
 }
+
+// ---------- Backup / Restore: export & re-import all saved Starting XIs ----------
+// This is the only user data the app persists (localStorage), so backing it up
+// protects against clearing browser data, switching phones, reinstalling the
+// app, or moving to a new hosting URL — all of which otherwise wipe it silently.
+
+function downloadBackup() {
+  const payload = {
+    app: 'Squad Ledger Dashboard',
+    exportedAt: new Date().toISOString(),
+    manualSquads: manualSquads,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `squad-ledger-backup-${dateStamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function restoreFromBackupFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+    } catch (e) {
+      alert('That file isn\'t valid JSON — please pick a Squad Ledger backup file.');
+      return;
+    }
+    const incoming = parsed && parsed.manualSquads;
+    if (!incoming || typeof incoming !== 'object') {
+      alert('That file doesn\'t look like a Squad Ledger backup (missing squad data).');
+      return;
+    }
+    const teamCount = Object.values(incoming).reduce(
+      (sum, teams) => sum + Object.keys(teams || {}).length, 0
+    );
+    const proceed = confirm(
+      `This backup contains saved lineups across ${Object.keys(incoming).length} era(s), ` +
+      `${teamCount} team squad(s) total.\n\nRestoring will REPLACE all currently saved lineups on this device. Continue?`
+    );
+    if (!proceed) return;
+
+    manualSquads = incoming;
+    saveManualSquads();
+    renderAll();
+    alert('Backup restored successfully.');
+  };
+  reader.onerror = () => alert('Could not read that file — please try again.');
+  reader.readAsText(file);
+}
+
+document.getElementById('backupBtn').addEventListener('click', downloadBackup);
+document.getElementById('restoreBtn').addEventListener('click', () => {
+  document.getElementById('restoreFileInput').click();
+});
+document.getElementById('restoreFileInput').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (file) restoreFromBackupFile(file);
+  e.target.value = ''; // allow re-selecting the same file next time
+});
 
 function getManualSquad(era, team) {
   return (manualSquads[era] && manualSquads[era][team]) || [];
