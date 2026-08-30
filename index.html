@@ -1132,6 +1132,12 @@ function restoreFromBackupFile(file) {
     );
     if (!proceed) return;
 
+    // A restored backup may predate a team rename (e.g. an old backup still
+    // has squads keyed under a team's previous name). Run the same migration
+    // used on normal page load so those don't end up orphaned under a dead
+    // team-name key after restoring.
+    migrateRenamedTeams(incoming);
+
     manualSquads = incoming;
     saveManualSquads();
     renderAll();
