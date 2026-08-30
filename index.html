@@ -1032,13 +1032,19 @@ function renderTeamPanel() {
 // ---------- Squad Builder: drag-and-drop Starting XI + cross-team surplus finder ----------
 
 const MANUAL_SQUADS_KEY = 'squadBuilderManualSquads';
-let manualSquads = loadManualSquads();
-let winnerTeamCache = {};
-let poachedVisible = {};
 
 // Team renames (e.g. New South Wales -> Sydney Sixers) can leave a person's
 // already-saved Starting XIs keyed under the old team name, effectively
 // orphaning them. This migrates any such keys forward automatically on load.
+//
+// IMPORTANT: this must be declared BEFORE `manualSquads = loadManualSquads()`
+// runs below, since loadManualSquads() calls migrateRenamedTeams() which
+// references TEAM_RENAME_MAP. A `const` isn't usable until its own
+// declaration line executes (temporal dead zone) — declaring it after the
+// call that needs it throws a ReferenceError, which was being silently
+// swallowed by loadManualSquads()'s try/catch and returning {} every time,
+// wiping the in-memory squad state back to empty on every single page load
+// regardless of what was actually saved in localStorage.
 const TEAM_RENAME_MAP = {
   'New South Wales': 'Sydney Sixers',
   'Victoria Bushrangers': 'Melbourne Stars',
@@ -1084,6 +1090,12 @@ function saveManualSquads() {
     window.localStorage.setItem(MANUAL_SQUADS_KEY, JSON.stringify(manualSquads));
   } catch (e) { /* ignore quota/availability errors */ }
 }
+
+// Only now, after loadManualSquads() and its dependency migrateRenamedTeams()
+// (and TEAM_RENAME_MAP) are all fully defined, is it safe to actually call it.
+let manualSquads = loadManualSquads();
+let winnerTeamCache = {};
+let poachedVisible = {};
 
 // ---------- Backup / Restore: export & re-import all saved Starting XIs ----------
 // This is the only user data the app persists (localStorage), so backing it up
