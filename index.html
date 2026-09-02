@@ -1659,6 +1659,17 @@ function getSecondTeamForEra(era, player, actualTeam) {
   return second ? second.team : null;
 }
 
+// Third-ranked eligible team, same resolution/ordering as above.
+function getThirdTeamForEra(era, player, actualTeam) {
+  const candidates = (ELIG_DATA.eligibility[era] && ELIG_DATA.eligibility[era][player]) || [];
+  if (candidates.length < 3) return null;
+  const sorted = candidates.slice().sort((a, b) => b.end - a.end || b.yearsIntoEra - a.yearsIntoEra || b.mat - a.mat);
+  const second = sorted.find(c => c.team !== actualTeam);
+  if (!second) return null;
+  const third = sorted.find(c => c.team !== actualTeam && c.team !== second.team);
+  return third ? third.team : null;
+}
+
 // Players currently borrowed away from their native team, for a given era.
 function getEraTransfers(era) {
   const winnerMap = buildWinnerTeamMap(era);
@@ -1847,6 +1858,7 @@ function renderTransfersSubView(era) {
   return transfers.map(t => {
     const toStyle = NATION_STYLE[DATA.teamNation[t.to]] || {};
     const second = getSecondTeamForEra(era, t.player, t.from);
+    const third = getThirdTeamForEra(era, t.player, t.from);
     return `<div class="lineups-transfer-row">
       <div class="ltr-main">
         <div class="ltr-top"><strong>${t.player}</strong>${nationalityTagHtml(t.player)}</div>
@@ -1855,6 +1867,7 @@ function renderTransfersSubView(era) {
           <div class="ltr-line">To: <span class="ltr-team" style="color:${toStyle.accent || '#d9a441'}; font-weight:700;">${t.to}</span></div>
         </div>
         <div class="ltr-second">2nd: ${second || '&mdash;'}</div>
+        <div class="ltr-second">3rd: ${third || '&mdash;'}</div>
       </div>
       <span class="rating-group">${playerRatingsHtml(t.player)}</span>
     </div>`;
@@ -1869,11 +1882,13 @@ function renderUnutilizedSubView(era) {
   return list.map(u => {
     const style = NATION_STYLE[DATA.teamNation[u.team]] || {};
     const second = getSecondTeamForEra(era, u.player, u.team);
+    const third = getThirdTeamForEra(era, u.player, u.team);
     return `<div class="lineups-transfer-row">
       <div class="ltr-main">
         <div class="ltr-top"><strong>${u.player}</strong>${nationalityTagHtml(u.player)}</div>
         <div class="ltr-bottom"><span class="ltr-chunk">${u.role} &middot;</span> <span class="ltr-chunk" style="color:${style.accent || 'var(--ink-dim)'};">${u.team}</span></div>
         <div class="ltr-second">2nd: ${second || '&mdash;'}</div>
+        <div class="ltr-second">3rd: ${third || '&mdash;'}</div>
       </div>
       <span class="rating-group">${playerRatingsHtml(u.player)}</span>
     </div>`;
