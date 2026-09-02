@@ -895,7 +895,7 @@ function renderTeamPanel() {
       </div>`;
     }
 
-    const fromTag = opts.fromTeam ? `<span class="card-from-tag">from ${opts.fromTeam}</span>` : '';
+    const fromTag = opts.fromTeam ? `<span class="card-from-tag">from ${opts.fromTeam}${opts.rankNote ? ` (${opts.rankNote})` : ''}</span>` : '';
     const loanTag = opts.loanedFrom ? `<span class="card-loan-tag">&#9679; on loan from ${opts.loanedFrom}</span>` : '';
     const orderNum = opts.inXi ? `<span class="card-order-num">${opts.position}</span>` : '';
     // Reorder buttons and the nationality tag were eating too much of the row's
@@ -940,7 +940,10 @@ function renderTeamPanel() {
     return `<div class="pool-role-header">${poolRoleLabels[role]} <span class="pool-role-count">${poolRoleGroups[role].length}</span></div>`
       + poolRoleGroups[role].map(p => cardHtml(p)).join('');
   }).join('');
-  let poachedCards = poachable.map(r => cardHtml(r.player, { fromTeam: r.actualTeam })).join('');
+  let poachedCards = poachable.map(r => cardHtml(r.player, {
+    fromTeam: r.actualTeam,
+    rankNote: r.rank === 3 ? '3rd team' : null,
+  })).join('');
   let lentOutCards = lentOut.map(r => cardHtml(r.player, { fromTeam: r.holder, lentOut: true })).join('');
 
   const xiCount = manualSet.size;
@@ -1224,22 +1227,30 @@ function findPoachablePlayers(era, team) {
   const results = [];
   for (const player in eligForEra) {
     const candidates = eligForEra[player];
-    if (candidates.length < 2) continue; // no second team possible
+    if (candidates.length < 2) continue; // no second (or third) team possible
     const actualTeam = winnerMap[player];
     if (!actualTeam || actualTeam === team) continue;
 
     // Same sort order used for the modal's Team-wise breakdown / "Second team" line
     const sorted = candidates.slice().sort((a, b) => b.end - a.end || b.yearsIntoEra - a.yearsIntoEra || b.mat - a.mat);
     const secondCandidate = sorted.find(c => c.team !== actualTeam);
-    if (!secondCandidate || secondCandidate.team !== team) continue;
+    const thirdCandidate = secondCandidate
+      ? sorted.find(c => c.team !== actualTeam && c.team !== secondCandidate.team)
+      : null;
+
+    let matched = null;
+    let rank = null;
+    if (secondCandidate && secondCandidate.team === team) { matched = secondCandidate; rank = 2; }
+    else if (thirdCandidate && thirdCandidate.team === team) { matched = thirdCandidate; rank = 3; }
+    if (!matched) continue;
 
     results.push({
-      player, actualTeam,
-      mat: secondCandidate.mat, runs: secondCandidate.runs, wkts: secondCandidate.wkts,
-      natMatch: secondCandidate.natMatch,
+      player, actualTeam, rank,
+      mat: matched.mat, runs: matched.runs, wkts: matched.wkts,
+      natMatch: matched.natMatch,
     });
   }
-  results.sort((a, b) => b.mat - a.mat);
+  results.sort((a, b) => a.rank - b.rank || b.mat - a.mat);
   return results;
 }
 
@@ -1436,6 +1447,9 @@ function openPlayerModal(playerName, overrideTeam) {
   const secondTeam = sortedCandidates.length > 1
     ? sortedCandidates.find(c => c.team !== displayTeam)
     : null;
+  const thirdTeam = (sortedCandidates.length > 2 && secondTeam)
+    ? sortedCandidates.find(c => c.team !== displayTeam && c.team !== secondTeam.team)
+    : null;
 
   let html = `<h3>${playerName}</h3><div class="modal-sub">${d.role} &middot; assigned to ${displayTeam} (ERA ${ERA_LABELS[currentEra]})</div>`;
   const loanDest = (displayTeam && displayTeam !== 'Not assigned this era')
@@ -1445,6 +1459,9 @@ function openPlayerModal(playerName, overrideTeam) {
   }
   if (secondTeam) {
     html += `<div class="modal-sub" style="margin-top:-6px; opacity:0.7;">Second team: ${secondTeam.team}</div>`;
+  }
+  if (thirdTeam) {
+    html += `<div class="modal-sub" style="margin-top:-6px; opacity:0.55;">Third team: ${thirdTeam.team}</div>`;
   }
   if (d.battingHand || d.bowlingStyle) {
     const parts = [];
