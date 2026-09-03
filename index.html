@@ -558,6 +558,15 @@
     display: flex; align-items: center; justify-content: center;
   }
   .search-clear-btn:hover { color: var(--gold); border-color: var(--gold); }
+  .players-team-filter-row {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+  }
+  .ptf-select {
+    flex: 1 1 auto; min-width: 90px; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 6px; color: var(--ink); font-family: 'Inter', sans-serif; font-size: 12px; outline: none;
+  }
+  .ptf-select:focus { border-color: var(--turf-light); }
+  .ptf-clear-btn { font-size: 12px; padding: 8px 12px; flex-shrink: 0; }
   .players-table-wrap {
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     max-height: 520px; overflow-y: auto; overflow-x: auto;
@@ -2058,6 +2067,32 @@ function nationBadge(natCode) {
   return `<span style="color:${style.accent}; font-weight:700;">${natCode}</span>`;
 }
 
+// Resolves a player's team for a given era at a given eligibility rank
+// (1 = native/actual team, 2 = second-ranked, 3 = third-ranked), reusing the
+// same resolution logic used elsewhere (modal, transfers, unutilized lists).
+function getPlayerTeamForEraRank(player, era, rank) {
+  const winnerMap = buildWinnerTeamMap(era);
+  const actualTeam = winnerMap[player];
+  if (rank === 1) return actualTeam || null;
+  if (!actualTeam) return null;
+  if (rank === 2) return getSecondTeamForEra(era, player, actualTeam);
+  if (rank === 3) return getThirdTeamForEra(era, player, actualTeam);
+  return null;
+}
+
+// True if `player` matches `team` at the given rank, scoped to eraFilter
+// ('all' or a specific era) and rankFilter ('any' or 1/2/3).
+function playerMatchesTeamFilter(player, team, eraFilter, rankFilter) {
+  const eras = eraFilter === 'all' ? DATA.overview.eras : [eraFilter];
+  const ranks = rankFilter === 'any' ? [1, 2, 3] : [Number(rankFilter)];
+  for (const era of eras) {
+    for (const rank of ranks) {
+      if (getPlayerTeamForEraRank(player, era, rank) === team) return true;
+    }
+  }
+  return false;
+}
+
 function buildSortedPlayers() {
   const presence = buildEraPresenceMap();
   const players = Object.keys(DATA.playerDetail).map(name => {
@@ -2089,12 +2124,31 @@ function buildSortedPlayers() {
   return players;
 }
 
+let playerTeamFilter = { era: 'all', rank: 'any', team: '' };
+
 function renderPlayersList() {
   SORTED_PLAYERS_CACHE = buildSortedPlayers();
+  const eraShort = { 'Era2014': "'14", 'Era2017': "'17", 'Era2020': "'20", 'Era2023': "'23", 'Era2026': "'26" };
+  const eraOptions = `<option value="all">All eras</option>` +
+    DATA.overview.eras.map(era => `<option value="${era}">ERA ${eraShort[era]}</option>`).join('');
+  const teamOptions = `<option value="">All teams</option>` +
+    Object.keys(TEAM_CODE).sort().map(t => `<option value="${t}">${t}</option>`).join('');
+
   document.getElementById('playersListSection').innerHTML = `
     <div class="players-search-bar">
       <input type="text" id="playerSearchInput" placeholder="Search player name\u2026" autocomplete="off" />
       <button id="playerSearchClear" class="search-clear-btn" aria-label="Clear search">&times;</button>
+    </div>
+    <div class="players-team-filter-row">
+      <select id="ptfEra" class="ptf-select">${eraOptions}</select>
+      <select id="ptfRank" class="ptf-select">
+        <option value="any">Any rank</option>
+        <option value="1">1st team</option>
+        <option value="2">2nd team</option>
+        <option value="3">3rd team</option>
+      </select>
+      <select id="ptfTeam" class="ptf-select">${teamOptions}</select>
+      <button id="ptfClear" class="sb-btn sb-btn-ghost ptf-clear-btn">Clear</button>
     </div>
     <div class="players-table-wrap" id="playersTableInner"></div>
   `;
@@ -2105,6 +2159,26 @@ function renderPlayersList() {
     input.value = '';
     renderPlayersTable('');
     input.focus();
+  });
+
+  const eraSel = document.getElementById('ptfEra');
+  const rankSel = document.getElementById('ptfRank');
+  const teamSel = document.getElementById('ptfTeam');
+  eraSel.value = playerTeamFilter.era;
+  rankSel.value = playerTeamFilter.rank;
+  teamSel.value = playerTeamFilter.team;
+
+  function onFilterChange() {
+    playerTeamFilter = { era: eraSel.value, rank: rankSel.value, team: teamSel.value };
+    renderPlayersTable(input.value);
+  }
+  eraSel.addEventListener('change', onFilterChange);
+  rankSel.addEventListener('change', onFilterChange);
+  teamSel.addEventListener('change', onFilterChange);
+  document.getElementById('ptfClear').addEventListener('click', () => {
+    playerTeamFilter = { era: 'all', rank: 'any', team: '' };
+    eraSel.value = 'all'; rankSel.value = 'any'; teamSel.value = '';
+    renderPlayersTable(input.value);
   });
 }
 
@@ -2125,7 +2199,12 @@ function renderPlayersTable(filterText) {
   const q = filterText.trim().toLowerCase();
 
   const indexed = SORTED_PLAYERS_CACHE.map((p, i) => ({ p, rank: i + 1 }));
-  const visible = q ? indexed.filter(x => x.p.name.toLowerCase().includes(q)) : indexed;
+  let visible = q ? indexed.filter(x => x.p.name.toLowerCase().includes(q)) : indexed;
+  if (playerTeamFilter.team) {
+    visible = visible.filter(x =>
+      playerMatchesTeamFilter(x.p.name, playerTeamFilter.team, playerTeamFilter.era, playerTeamFilter.rank)
+    );
+  }
 
   let rows = visible.map(({ p, rank }) => {
     const batCell = p.batR != null ? chipHtml(p.batR, p.batSkill) : '<span style="opacity:0.3">&mdash;</span>';
