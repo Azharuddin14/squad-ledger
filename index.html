@@ -1694,7 +1694,7 @@ function getEraTransfers(era) {
   return transfers;
 }
 
-// 85+ rated players (bat or bowl) with a native team this era, absent from every manual XI.
+// 80+ rated players (bat or bowl), plus 75-rated T20-specialist batsmen, with a native team this era, absent from every manual XI.
 function getEraUnutilized(era) {
   const winnerMap = buildWinnerTeamMap(era);
   const squads = manualSquads[era] || {};
@@ -1707,7 +1707,11 @@ function getEraUnutilized(era) {
     const d = DATA.playerDetail[player];
     if (!d) continue;
     const maxR = Math.max(d.bat ? d.bat.rating : 0, d.bowl ? d.bowl.rating : 0);
-    if (maxR >= 85) results.push({ player, team: winnerMap[player], rating: maxR, role: d.role });
+    // 85+ and 80-rated players always qualify; a 75-rated player only
+    // qualifies if their batting skill is specifically T (T20 specialist) —
+    // a lower overall rating but a special-case skill worth surfacing.
+    const qualifies = maxR >= 80 || (maxR === 75 && d.bat && d.bat.skill === 'T');
+    if (qualifies) results.push({ player, team: winnerMap[player], rating: maxR, role: d.role });
   }
   results.sort((a, b) => b.rating - a.rating || a.player.localeCompare(b.player));
   return results;
@@ -1886,7 +1890,7 @@ function renderTransfersSubView(era) {
 function renderUnutilizedSubView(era) {
   const list = getEraUnutilized(era);
   if (list.length === 0) {
-    return `<div class="lineups-summary-empty">Every 85+ rated player this era is in a saved XI somewhere.</div>`;
+    return `<div class="lineups-summary-empty">Every 80+ rated player (and 75-rated T20 specialist) this era is in a saved XI somewhere.</div>`;
   }
   return list.map(u => {
     const style = NATION_STYLE[DATA.teamNation[u.team]] || {};
