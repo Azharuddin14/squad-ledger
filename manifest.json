@@ -1,31 +1,14 @@
 {
-  "name": "Squad Ledger Dashboard",
-  "short_name": "Squad Ledger",
-  "description": "Cross-league, cross-era T20 franchise cricket player ratings and squad builder.",
-  "start_url": "./index.html",
-  "scope": "./",
+  "name": "MatchSim — Cricket Simulator",
+  "short_name": "MatchSim",
+  "description": "A from-scratch cricket match simulation engine — player database, team builder, tournaments, seasons, and full ball-by-ball simulation.",
+  "start_url": ".",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0b1f16",
-  "theme_color": "#0e2419",
+  "background_color": "#0F2C22",
+  "theme_color": "#1B4332",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512-maskable.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
