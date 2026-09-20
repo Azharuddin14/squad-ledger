@@ -515,6 +515,7 @@
   .chip .skill { font-weight: 400; opacity: 0.75; font-size: 10.5px; }
   .skill-gold { color: var(--gold) !important; opacity: 1 !important; font-weight: 700; }
   .skill-silver { color: var(--silver) !important; opacity: 1 !important; font-weight: 700; }
+  .skill-bronze { color: var(--bronze) !important; opacity: 1 !important; font-weight: 700; }
 
   .tier-95 { background: linear-gradient(180deg, rgba(255,183,3,0.22), rgba(255,183,3,0.08)); border: 1.5px solid var(--gold); color: var(--gold); }
   .tier-90 { background: linear-gradient(180deg, rgba(207,216,220,0.20), rgba(207,216,220,0.06)); border: 1.5px solid var(--silver); color: var(--silver); }
@@ -827,9 +828,10 @@ function tierClass(rating) {
   return '';
 }
 function skillClass(skill) {
+  if (!skill) return '';
   if (skill === 'T' || skill === 'W') return 'skill-gold';
-  if (skill === 'S' || skill === 'R') return 'skill-silver';
-  return '';
+  if (skill === 'M' || skill === 'N' || skill === 'S') return 'skill-silver';
+  return 'skill-bronze';
 }
 function chipHtml(rating, skill) {
   if (rating == null) return '';
@@ -1148,10 +1150,6 @@ let manualSquads = loadManualSquads();
 // "undo" can still restore exactly what Squad Ledger shipped with.
 const RATING_OVERRIDES_KEY = 'squadLedgerRatingOverrides_v1';
 const RATING_ORIGINALS_KEY = 'squadLedgerRatingOriginals_v1';
-const SL_SKILL_LABELS = {
-  X: 'No special skill', S: 'Compulsive slogger', T: 'T20 specialist',
-  R: 'Utility bowler', W: 'Wicket-taking specialist', E: 'Economical bowler', D: 'Death specialist'
-};
 
 function loadJsonFromStorage(key) {
   try {
@@ -2369,17 +2367,6 @@ function extractNameParts(fullName) {
   return { given: tokens.slice(0, i + 1), surname: normalizeNameForMatch(surnameTokens.join(' ')) };
 }
 
-// Rough label mapping between MatchSim's skill taxonomy and Squad Ledger's
-// single-letter codes, for display only — the two systems don't line up
-// perfectly, so this is a best-effort translation, not a data change.
-const MS_BAT_SKILL_TO_SL = {
-  'Compulsive Slogger': 'S', 'Pinch Hitter': 'S', 'Finisher': 'T',
-  'Specialist Batsman': 'X', 'None': 'X', 'X': 'X'
-};
-const MS_BOWL_SKILL_TO_SL = {
-  'Specialist Bowler': 'R', 'Death/Old Ball Bowler': 'D', 'New Ball Bowler': 'E',
-  'Mystery Spinner': 'W', 'None': 'R'
-};
 
 function buildPlayerDetailIndex() {
   // Exact/normalized-name index (handles the Squad Ledger entries that are
@@ -2406,6 +2393,19 @@ function buildPlayerDetailIndex() {
   });
   return { exact, fuzzy };
 }
+
+// MatchSim's own skill categories, reduced to a single letter for compact
+// chip display and gold/silver/bronze tiering — this is MatchSim's own
+// scheme (not a translation into Squad Ledger's original letters), so the
+// full descriptive name is still kept as skillLabel wherever it's applied.
+const MS_BAT_SKILL_LETTER = {
+  'Specialist Batsman': 'T', 'Compulsive Slogger': 'S', 'Finisher': 'F',
+  'Pinch Hitter': 'P', 'None': 'X'
+};
+const MS_BOWL_SKILL_LETTER = {
+  'Specialist Bowler': 'W', 'New Ball Bowler': 'N', 'Mystery Spinner': 'M',
+  'Death/Old Ball Bowler': 'D', 'None': 'X'
+};
 
 function resolvePlayerName(msName, nameIdx) {
   const alias = MANUAL_NAME_ALIASES[msName] || MANUAL_NAME_ALIASES[normalizeNameForMatch(msName)];
@@ -2531,11 +2531,11 @@ function computeImportComparisonRows() {
     const totalAbsDiff = (batDiff != null ? Math.abs(batDiff) : 0) + (bowlDiff != null ? Math.abs(bowlDiff) : 0);
     rows.push({
       name: slName,
-      slBat, slBatSkill: slDetail.bat ? slDetail.bat.skill : null,
-      msBat, msBatSkill: MS_BAT_SKILL_TO_SL[p.battingSkill] || null, msBatSkillRaw: p.battingSkill,
+      slBat, slBatSkill: slDetail.bat ? slDetail.bat.skill : null, slBatSkillLabel: slDetail.bat ? slDetail.bat.skillLabel : null,
+      msBat, msBatSkillName: p.battingSkill || null, msBatSkill: MS_BAT_SKILL_LETTER[p.battingSkill] || null,
       batDiff,
-      slBowl, slBowlSkill: slDetail.bowl ? slDetail.bowl.skill : null,
-      msBowl, msBowlSkill: MS_BOWL_SKILL_TO_SL[p.bowlingSkill] || null, msBowlSkillRaw: p.bowlingSkill,
+      slBowl, slBowlSkill: slDetail.bowl ? slDetail.bowl.skill : null, slBowlSkillLabel: slDetail.bowl ? slDetail.bowl.skillLabel : null,
+      msBowl, msBowlSkillName: p.bowlingSkill || null, msBowlSkill: MS_BOWL_SKILL_LETTER[p.bowlingSkill] || null,
       bowlDiff,
       totalAbsDiff
     });
@@ -2574,14 +2574,16 @@ function applyImportedRatings() {
         originals[r.name].bat = { rating: d.bat.rating, skill: d.bat.skill, skillLabel: d.bat.skillLabel };
       }
       const skill = r.msBatSkill || d.bat.skill;
-      thisOverride.bat = { rating: r.msBat, skill, skillLabel: SL_SKILL_LABELS[skill] || d.bat.skillLabel };
+      const skillLabel = r.msBatSkillName || d.bat.skillLabel;
+      thisOverride.bat = { rating: r.msBat, skill, skillLabel };
     }
     if (r.msBowl != null && d.bowl) {
       if (!originals[r.name].bowl) {
         originals[r.name].bowl = { rating: d.bowl.rating, skill: d.bowl.skill, skillLabel: d.bowl.skillLabel };
       }
       const skill = r.msBowlSkill || d.bowl.skill;
-      thisOverride.bowl = { rating: r.msBowl, skill, skillLabel: SL_SKILL_LABELS[skill] || d.bowl.skillLabel };
+      const skillLabel = r.msBowlSkillName || d.bowl.skillLabel;
+      thisOverride.bowl = { rating: r.msBowl, skill, skillLabel };
     }
 
     overrides[r.name] = Object.assign({}, overrides[r.name], thisOverride);
@@ -2659,10 +2661,10 @@ function renderImportComparison(bannerMessage) {
     <tr>
       <td style="text-align:left;">${r.name}</td>
       <td>${r.slBat != null ? chipHtml(r.slBat, r.slBatSkill) : '&mdash;'}</td>
-      <td>${r.msBat != null ? `<span class="chip ${tierClass(r.msBat)}">${r.msBat}<span class="skill ${skillClass(r.msBatSkill)}">${r.msBatSkill || ''}</span></span>` : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBatSkillRaw || ''}</div></td>
+      <td>${r.msBat != null ? chipHtml(r.msBat, r.msBatSkill) : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBatSkillName || ''}</div></td>
       <td>${diffCellHtml(r.batDiff)}</td>
       <td>${r.slBowl != null ? chipHtml(r.slBowl, r.slBowlSkill) : '&mdash;'}</td>
-      <td>${r.msBowl != null ? `<span class="chip ${tierClass(r.msBowl)}">${r.msBowl}<span class="skill ${skillClass(r.msBowlSkill)}">${r.msBowlSkill || ''}</span></span>` : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBowlSkillRaw || ''}</div></td>
+      <td>${r.msBowl != null ? chipHtml(r.msBowl, r.msBowlSkill) : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBowlSkillName || ''}</div></td>
       <td>${diffCellHtml(r.bowlDiff)}</td>
     </tr>`).join('');
 
