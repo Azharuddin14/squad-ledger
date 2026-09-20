@@ -2403,11 +2403,18 @@ function buildPlayerDetailIndex() {
   return { exact, fuzzy };
 }
 
-// No translation happens here — whatever string MatchSim's battingSkill/
-// bowlingSkill fields literally contain is imported and applied byte-for-byte
-// (used as both the short skill code and its own label). If MatchSim's export
-// format changes — e.g. starts writing single letters instead of full names,
-// or vice versa — this still does the right thing with no code change needed.
+// MatchSim's five batting and five bowling skill categories, reduced to the
+// short-form letters given for this app — used as both the skill code and
+// its own label everywhere (chip, modal, comparison table); the full
+// descriptive MatchSim text is never displayed.
+const MS_BAT_SKILL_LETTER = {
+  'Specialist Batsman': 'T', 'Compulsive Slogger': 'S', 'None': 'X',
+  'Finisher': 'F', 'Pinch Hitter': 'P'
+};
+const MS_BOWL_SKILL_LETTER = {
+  'Specialist Bowler': 'W', 'New Ball Bowler': 'N', 'Mystery Spinner': 'M',
+  'Death/Old Ball Bowler': 'D', 'None': 'X'
+};
 
 function resolvePlayerName(msName, nameIdx) {
   const alias = MANUAL_NAME_ALIASES[msName] || MANUAL_NAME_ALIASES[normalizeNameForMatch(msName)];
@@ -2534,10 +2541,10 @@ function computeImportComparisonRows() {
     rows.push({
       name: slName,
       slBat, slBatSkill: slDetail.bat ? slDetail.bat.skill : null, slBatSkillLabel: slDetail.bat ? slDetail.bat.skillLabel : null,
-      msBat, msBatSkillName: p.battingSkill || null, msBatSkill: p.battingSkill || null,
+      msBat, msBatSkillName: MS_BAT_SKILL_LETTER[p.battingSkill] || null, msBatSkill: MS_BAT_SKILL_LETTER[p.battingSkill] || null,
       batDiff,
       slBowl, slBowlSkill: slDetail.bowl ? slDetail.bowl.skill : null, slBowlSkillLabel: slDetail.bowl ? slDetail.bowl.skillLabel : null,
-      msBowl, msBowlSkillName: p.bowlingSkill || null, msBowlSkill: p.bowlingSkill || null,
+      msBowl, msBowlSkillName: MS_BOWL_SKILL_LETTER[p.bowlingSkill] || null, msBowlSkill: MS_BOWL_SKILL_LETTER[p.bowlingSkill] || null,
       bowlDiff,
       totalAbsDiff
     });
@@ -2665,10 +2672,10 @@ function renderImportComparison(bannerMessage) {
     <tr>
       <td style="text-align:left;">${r.name}</td>
       <td>${r.slBat != null ? chipHtml(r.slBat, r.slBatSkill) : '&mdash;'}</td>
-      <td>${r.msBat != null ? chipHtml(r.msBat, r.msBatSkill) : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBatSkillName || ''}</div></td>
+      <td>${r.msBat != null ? chipHtml(r.msBat, r.msBatSkill) : '&mdash;'}</td>
       <td>${diffCellHtml(r.batDiff)}</td>
       <td>${r.slBowl != null ? chipHtml(r.slBowl, r.slBowlSkill) : '&mdash;'}</td>
-      <td>${r.msBowl != null ? chipHtml(r.msBowl, r.msBowlSkill) : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBowlSkillName || ''}</div></td>
+      <td>${r.msBowl != null ? chipHtml(r.msBowl, r.msBowlSkill) : '&mdash;'}</td>
       <td>${diffCellHtml(r.bowlDiff)}</td>
     </tr>`).join('');
 
