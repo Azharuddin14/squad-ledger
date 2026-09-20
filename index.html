@@ -2342,6 +2342,33 @@ function normalizeNameForMatch(name) {
   return (name || '').toLowerCase().replace(/[.\-']/g, '').replace(/\s+/g, ' ').trim();
 }
 
+// Squad Ledger stores most players in cricket-scorecard style ("RG Sharma"),
+// but MatchSim exports full names ("Rohit Sharma") — an exact/normalized
+// match alone only catches the minority of Squad Ledger entries that happen
+// to already be full names. This adds a surname + first-initial fallback so
+// e.g. "Rohit Sharma" resolves to "RG Sharma": strip a trailing surname-particle
+// block ("de Villiers", "van der Merwe") off the end, then match remaining
+// surname + the first letter of the given name/initials. Only a token that is
+// ALREADY lowercase in the source counts as a particle — this matters because
+// two-letter initials like "DA" or "DE" would otherwise collide with real
+// lowercase particles ("da Silva", "de Kock") once lowercased for comparison.
+const SURNAME_PARTICLES = new Set(['de', 'van', 'du', 'ten', 'von', 'der', 'al', 'bin', 'el', 'da', 'dos', 'la', 'le', 'ur']);
+function isSurnameParticle(token) {
+  return token === token.toLowerCase() && token.length <= 4 && SURNAME_PARTICLES.has(normalizeNameForMatch(token));
+}
+function extractNameParts(fullName) {
+  const tokens = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return { given: [], surname: '' };
+  let i = tokens.length - 1;
+  const surnameTokens = [tokens[i]];
+  i--;
+  while (i >= 0 && isSurnameParticle(tokens[i])) {
+    surnameTokens.unshift(tokens[i]);
+    i--;
+  }
+  return { given: tokens.slice(0, i + 1), surname: normalizeNameForMatch(surnameTokens.join(' ')) };
+}
+
 // Rough label mapping between MatchSim's skill taxonomy and Squad Ledger's
 // single-letter codes, for display only — the two systems don't line up
 // perfectly, so this is a best-effort translation, not a data change.
@@ -2355,15 +2382,93 @@ const MS_BOWL_SKILL_TO_SL = {
 };
 
 function buildPlayerDetailIndex() {
-  // DATA.playerDetail is keyed by exact name; also index by normalized name
-  // so small formatting differences (periods, casing) between the two DBs
-  // don't cause false "unmatched" results.
-  const idx = {};
+  // Exact/normalized-name index (handles the Squad Ledger entries that are
+  // already full names, plus minor punctuation/casing differences), and a
+  // surname+first-initial index as a fallback for the "RG Sharma" vs
+  // "Rohit Sharma" case. A surname+initial combo held by more than one
+  // Squad Ledger player (e.g. two different "R Sharma"s) is deliberately
+  // left out of the fuzzy index — guessing wrong there would silently apply
+  // one player's rating to a different one, which is worse than leaving it
+  // unmatched for a manual look.
+  const exact = {};
+  const surnameGroups = {};
   Object.keys(DATA.playerDetail).forEach(name => {
-    idx[normalizeNameForMatch(name)] = name;
+    exact[normalizeNameForMatch(name)] = name;
+    const { given, surname } = extractNameParts(name);
+    if (!given.length || !surname) return;
+    const firstInitial = normalizeNameForMatch(given[0])[0] || '';
+    const key = surname + '|' + firstInitial;
+    (surnameGroups[key] = surnameGroups[key] || []).push(name);
   });
-  return idx;
+  const fuzzy = {};
+  Object.keys(surnameGroups).forEach(key => {
+    if (surnameGroups[key].length === 1) fuzzy[key] = surnameGroups[key][0];
+  });
+  return { exact, fuzzy };
 }
+
+function resolvePlayerName(msName, nameIdx) {
+  const alias = MANUAL_NAME_ALIASES[msName] || MANUAL_NAME_ALIASES[normalizeNameForMatch(msName)];
+  if (alias && DATA.playerDetail[alias]) return alias;
+  const exactHit = DATA.playerDetail[msName] ? msName : nameIdx.exact[normalizeNameForMatch(msName)];
+  if (exactHit) return exactHit;
+  const { given, surname } = extractNameParts(msName);
+  if (!given.length || !surname) return null;
+  const firstInitial = normalizeNameForMatch(given[0])[0] || '';
+  return nameIdx.fuzzy[surname + '|' + firstInitial] || null;
+}
+
+// Hand-resolved fixes for imported-DB names that the automatic matcher can't
+// place safely on its own — either because more than one Squad Ledger player
+// shares the same surname + first initial (so guessing would risk applying
+// one real person's rating to a different one), or because the two DBs spell
+// the same person differently, or use a nickname vs. a formal initials style.
+// Add a line here — "MatchSim's exact name": "Squad Ledger's exact name" — for
+// any player you want to resolve manually; it takes priority over automatic
+// matching. Left-hand side must match the "name" field exactly as it appears
+// in the imported MatchSim DB.
+const MANUAL_NAME_ALIASES = {
+  'Rohit Sharma': 'RG Sharma',
+  'Karn Sharma': 'KV Sharma',
+  'Cameron Green': 'C Green',
+  'Chris Green': 'CJ Green',
+  'Rinku Singh': 'RK Singh',
+  'Shahrukh Khan': 'M Shahrukh Khan',
+  'Finn Allen': 'FH Allen',
+  'Moeen Ali': 'MM Ali',
+  'Dwayne Bravo': 'DJ Bravo',
+  'Zaheer Khan': 'Z Khan',
+  'Tilak Varma': 'NT Tilak Varma',
+  'Varun Chakaravarthy': 'CV Varun',
+  'Wanindu Hasaranga': 'PW Hasaranga',
+  'Josh Phillipe': 'JR Philippe',
+  'Nitish Kumar Reddy': 'K Nitish Kumar Reddy',
+  'Sai Sudarshan': 'B Sai Sudharsan',
+  'Prasidh Krishna': 'M Prasidh Krishna',
+  'Mohammad Wasim Jr': 'Mohammad Wasim (1)',
+  'Noor Ahmed': 'Noor Ahmad',
+  'Rassie van der Dussen': 'HE van der Dussen',
+  'Mohammad Nawaz': 'Mohammad Nawaz (3)',
+  'Inshanullah': 'Ihsanullah',
+  'Lasith Malinga': 'SL Malinga',
+  'Nathan Coulter Nile': 'NM Coulter-Nile',
+  'Albie Morkel': 'JA Morkel',
+  'Mahela Jayawardene': 'DPMD Jayawardene',
+  'Dinesh Karthik': 'KD Karthik',
+  'Ross Taylor': 'LRPL Taylor',
+  'Vinay Kumar': 'R Vinay Kumar',
+  'Thisara Perera': 'NLTC Perera',
+  'Naveen ul Haq': 'Naveen-ul-Haq',
+  'Mujeeb ur Rehman': 'Mujeeb Ur Rahman',
+  'Leus du Plooy': 'JL du Plooy',
+  'Bhanuka Rajapaksa': 'PBB Rajapaksa',
+  'Kamindu Mendis': 'BKG Mendis',
+  'Kusal Perera': 'MDKJ Perera',
+  'Rahul Sharma': 'R Sharma',
+  'Ashutosh Sharma': 'AR Sharma'
+  // Add more lines here in the same "MatchSim name": "Squad Ledger name"
+  // format whenever a future import turns up an unmatched player.
+};
 
 function extractPlayersArray(parsed) {
   if (Array.isArray(parsed)) return parsed;
@@ -2411,8 +2516,7 @@ function computeImportComparisonRows() {
   importedPlayers.forEach(p => {
     const msName = p.name;
     if (!msName) return;
-    const exact = DATA.playerDetail[msName] ? msName : null;
-    const slName = exact || nameIdx[normalizeNameForMatch(msName)] || null;
+    const slName = resolvePlayerName(msName, nameIdx);
     const slDetail = slName ? DATA.playerDetail[slName] : null;
     if (!slDetail) {
       unmatched.push(msName);
