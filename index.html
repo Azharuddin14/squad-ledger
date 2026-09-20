@@ -234,6 +234,35 @@
   .matrix-table th { color: var(--turf-light); font-weight: 600; text-transform: uppercase; font-size: 11px; }
   .matrix-table td:first-child, .matrix-table th:first-child { text-align: left; color: var(--ink-dim); }
   .matrix-table tr.active-era td { background: rgba(75,145,99,0.10); color: var(--ink); font-weight: 700; }
+
+  .import-panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; margin: 14px 0 22px;
+  }
+  .import-panel-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .import-panel-sub { color: var(--ink-dim); font-size: 12.5px; margin-bottom: 14px; line-height: 1.5; }
+  .import-controls-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .import-textarea {
+    width: 100%; min-height: 90px; background: rgba(255,255,255,0.03); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--ink); font-family: monospace; font-size: 12px; padding: 10px;
+    box-sizing: border-box; resize: vertical;
+  }
+  .import-summary-row { display: flex; gap: 18px; flex-wrap: wrap; margin: 14px 0; font-size: 12.5px; }
+  .import-summary-stat b { font-size: 17px; display: block; color: var(--ink); }
+  .import-summary-stat span { color: var(--ink-dim); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.06em; }
+  .import-filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0 14px; }
+  .import-filter-row input[type="text"], .import-filter-row select {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--ink); padding: 6px 9px; font-size: 12.5px; font-family: 'Inter', sans-serif;
+  }
+  .import-diff-table td, .import-diff-table th { white-space: nowrap; }
+  .import-diff-cell { font-weight: 700; }
+  .import-diff-pos { color: #7cc98a; }
+  .import-diff-neg { color: #e08a8a; }
+  .import-diff-zero { color: var(--ink-dim); font-weight: 400; }
+  .import-unmatched-toggle { cursor: pointer; color: var(--turf-light); font-size: 12px; text-decoration: underline; margin-top: 10px; display: inline-block; }
+  .import-unmatched-list { display: none; margin-top: 8px; font-size: 12px; color: var(--ink-dim); line-height: 1.8; max-height: 200px; overflow-y: auto; }
+  .import-unmatched-list.open { display: block; }
   .matrix-table tr.matrix-total-row td { border-top: 2px solid var(--turf-light); color: var(--turf-light); }
 
   /* Team grid */
@@ -629,10 +658,13 @@
       <button id="backupBtn" class="sb-btn sb-btn-ghost backup-restore-btn">&#11015;&#65039; Backup</button>
       <button id="restoreBtn" class="sb-btn sb-btn-ghost backup-restore-btn">&#11014;&#65039; Restore</button>
       <input type="file" id="restoreFileInput" accept="application/json,.json" style="display:none;">
+      <button id="importDbBtn" class="sb-btn sb-btn-ghost backup-restore-btn">&#128260; Import DB</button>
     </div>
   </div>
 
   <div class="overview-grid" id="overviewGrid"></div>
+
+  <div id="importDbPanel" style="display:none;"></div>
 
   <div class="era-tabs" id="eraTabs"></div>
 
@@ -1106,6 +1138,43 @@ function saveManualSquads() {
 // Only now, after loadManualSquads() and its dependency migrateRenamedTeams()
 // (and TEAM_RENAME_MAP) are all fully defined, is it safe to actually call it.
 let manualSquads = loadManualSquads();
+
+// ===================== Rating override persistence =====================
+// Applying an imported DB overwrites DATA.playerDetail's rating/skill fields
+// in place (never squads/team assignments), so every screen that reads
+// DATA.playerDetail picks up the new numbers immediately. Overrides are also
+// mirrored to localStorage, and the original values snapshotted the first
+// time any player is touched, so a reload keeps the applied ratings and an
+// "undo" can still restore exactly what Squad Ledger shipped with.
+const RATING_OVERRIDES_KEY = 'squadLedgerRatingOverrides_v1';
+const RATING_ORIGINALS_KEY = 'squadLedgerRatingOriginals_v1';
+const SL_SKILL_LABELS = {
+  X: 'No special skill', S: 'Compulsive slogger', T: 'T20 specialist',
+  R: 'Utility bowler', W: 'Wicket-taking specialist', E: 'Economical bowler', D: 'Death specialist'
+};
+
+function loadJsonFromStorage(key) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+function saveJsonToStorage(key, obj) {
+  try { window.localStorage.setItem(key, JSON.stringify(obj)); } catch (e) { /* ignore quota/availability errors */ }
+}
+
+function applyRatingOverridesToData(overrides) {
+  Object.keys(overrides).forEach(name => {
+    const d = DATA.playerDetail[name];
+    if (!d) return;
+    const o = overrides[name];
+    if (o.bat && d.bat) Object.assign(d.bat, o.bat);
+    if (o.bowl && d.bowl) Object.assign(d.bowl, o.bowl);
+  });
+}
+
+// Apply any overrides saved from a previous session before the first render.
+applyRatingOverridesToData(loadJsonFromStorage(RATING_OVERRIDES_KEY));
 let winnerTeamCache = {};
 let poachedVisible = {};
 
@@ -2257,6 +2326,317 @@ function renderPlayersTable(filterText) {
     });
   });
 }
+
+// ===================== Player DB Import / Rating Comparison =====================
+// Lets the user import a MatchSim-format player DB (players: [{name, batting,
+// bowling, battingSkill, bowlingSkill, ...}]) and compares each matched player's
+// rating/skill against Squad Ledger's own DATA.playerDetail, sorted by biggest
+// disagreement first, so a precise, at-a-glance sanity check is possible before
+// building any era squads.
+let importedPlayers = null; // parsed array from the uploaded/pasted DB
+let importSortMode = 'diff'; // 'diff' | 'name' | 'batDiff' | 'bowlDiff'
+let importSearchQuery = '';
+let importShowUnmatchedOnly = false;
+
+function normalizeNameForMatch(name) {
+  return (name || '').toLowerCase().replace(/[.\-']/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// Rough label mapping between MatchSim's skill taxonomy and Squad Ledger's
+// single-letter codes, for display only — the two systems don't line up
+// perfectly, so this is a best-effort translation, not a data change.
+const MS_BAT_SKILL_TO_SL = {
+  'Compulsive Slogger': 'S', 'Pinch Hitter': 'S', 'Finisher': 'T',
+  'Specialist Batsman': 'X', 'None': 'X', 'X': 'X'
+};
+const MS_BOWL_SKILL_TO_SL = {
+  'Specialist Bowler': 'R', 'Death/Old Ball Bowler': 'D', 'New Ball Bowler': 'E',
+  'Mystery Spinner': 'W', 'None': 'R'
+};
+
+function buildPlayerDetailIndex() {
+  // DATA.playerDetail is keyed by exact name; also index by normalized name
+  // so small formatting differences (periods, casing) between the two DBs
+  // don't cause false "unmatched" results.
+  const idx = {};
+  Object.keys(DATA.playerDetail).forEach(name => {
+    idx[normalizeNameForMatch(name)] = name;
+  });
+  return idx;
+}
+
+function extractPlayersArray(parsed) {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && Array.isArray(parsed.players)) return parsed.players;
+  return null;
+}
+
+function handleImportFileUpload(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('importPasteArea').value = e.target.result;
+    processImportedDbText(e.target.result);
+  };
+  reader.readAsText(file);
+}
+
+function processImportedDbText(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    document.getElementById('importResultsArea').innerHTML =
+      `<p style="color:#e08a8a;">Couldn't parse that as JSON: ${err.message}</p>`;
+    return;
+  }
+  const players = extractPlayersArray(parsed);
+  if (!players) {
+    document.getElementById('importResultsArea').innerHTML =
+      `<p style="color:#e08a8a;">Didn't find a players array — expected either a top-level array or an object with a "players" field.</p>`;
+    return;
+  }
+  importedPlayers = players;
+  importSortMode = 'diff';
+  importSearchQuery = '';
+  importShowUnmatchedOnly = false;
+  renderImportComparison();
+}
+
+function computeImportComparisonRows() {
+  const nameIdx = buildPlayerDetailIndex();
+  const rows = [];
+  const unmatched = [];
+  importedPlayers.forEach(p => {
+    const msName = p.name;
+    if (!msName) return;
+    const exact = DATA.playerDetail[msName] ? msName : null;
+    const slName = exact || nameIdx[normalizeNameForMatch(msName)] || null;
+    const slDetail = slName ? DATA.playerDetail[slName] : null;
+    if (!slDetail) {
+      unmatched.push(msName);
+      return;
+    }
+    const msBat = (typeof p.batting === 'number' && p.batting > 0) ? p.batting : null;
+    const msBowl = (typeof p.bowling === 'number' && p.bowling > 0) ? p.bowling : null;
+    const slBat = slDetail.bat ? slDetail.bat.rating : null;
+    const slBowl = slDetail.bowl ? slDetail.bowl.rating : null;
+    const batDiff = (msBat != null && slBat != null) ? (msBat - slBat) : null;
+    const bowlDiff = (msBowl != null && slBowl != null) ? (msBowl - slBowl) : null;
+    const totalAbsDiff = (batDiff != null ? Math.abs(batDiff) : 0) + (bowlDiff != null ? Math.abs(bowlDiff) : 0);
+    rows.push({
+      name: slName,
+      slBat, slBatSkill: slDetail.bat ? slDetail.bat.skill : null,
+      msBat, msBatSkill: MS_BAT_SKILL_TO_SL[p.battingSkill] || null, msBatSkillRaw: p.battingSkill,
+      batDiff,
+      slBowl, slBowlSkill: slDetail.bowl ? slDetail.bowl.skill : null,
+      msBowl, msBowlSkill: MS_BOWL_SKILL_TO_SL[p.bowlingSkill] || null, msBowlSkillRaw: p.bowlingSkill,
+      bowlDiff,
+      totalAbsDiff
+    });
+  });
+  return { rows, unmatched };
+}
+
+function diffCellHtml(diff) {
+  if (diff == null) return '<span class="import-diff-zero">&mdash;</span>';
+  if (diff === 0) return '<span class="import-diff-zero">0</span>';
+  const cls = diff > 0 ? 'import-diff-pos' : 'import-diff-neg';
+  const sign = diff > 0 ? '+' : '';
+  return `<span class="import-diff-cell ${cls}">${sign}${diff}</span>`;
+}
+
+// Overwrites DATA.playerDetail's rating/skill fields for every matched player
+// (never squads/team assignments) with the imported DB's numbers, snapshots
+// each player's pre-override values the first time they're touched (so undo
+// is exact), and persists both so a page reload keeps the applied ratings.
+function applyImportedRatings() {
+  const { rows } = computeImportComparisonRows();
+  const overrides = loadJsonFromStorage(RATING_OVERRIDES_KEY);
+  const originals = loadJsonFromStorage(RATING_ORIGINALS_KEY);
+  let appliedCount = 0;
+
+  rows.forEach(r => {
+    const d = DATA.playerDetail[r.name];
+    if (!d) return;
+    if (r.msBat == null && r.msBowl == null) return;
+
+    if (!originals[r.name]) originals[r.name] = {};
+    const thisOverride = { name: r.name };
+
+    if (r.msBat != null && d.bat) {
+      if (!originals[r.name].bat) {
+        originals[r.name].bat = { rating: d.bat.rating, skill: d.bat.skill, skillLabel: d.bat.skillLabel };
+      }
+      const skill = r.msBatSkill || d.bat.skill;
+      thisOverride.bat = { rating: r.msBat, skill, skillLabel: SL_SKILL_LABELS[skill] || d.bat.skillLabel };
+    }
+    if (r.msBowl != null && d.bowl) {
+      if (!originals[r.name].bowl) {
+        originals[r.name].bowl = { rating: d.bowl.rating, skill: d.bowl.skill, skillLabel: d.bowl.skillLabel };
+      }
+      const skill = r.msBowlSkill || d.bowl.skill;
+      thisOverride.bowl = { rating: r.msBowl, skill, skillLabel: SL_SKILL_LABELS[skill] || d.bowl.skillLabel };
+    }
+
+    overrides[r.name] = Object.assign({}, overrides[r.name], thisOverride);
+    appliedCount++;
+  });
+
+  applyRatingOverridesToData(overrides);
+  saveJsonToStorage(RATING_OVERRIDES_KEY, overrides);
+  saveJsonToStorage(RATING_ORIGINALS_KEY, originals);
+  renderAll();
+  renderImportComparison(`Applied updated ratings for ${appliedCount} player${appliedCount === 1 ? '' : 's'}. Squads and team assignments were left untouched.`);
+}
+
+// Restores every overridden player's pre-import rating/skill and clears the
+// saved override/original state entirely.
+function undoRatingOverrides() {
+  const originals = loadJsonFromStorage(RATING_ORIGINALS_KEY);
+  Object.keys(originals).forEach(name => {
+    const d = DATA.playerDetail[name];
+    if (!d) return;
+    const o = originals[name];
+    if (o.bat && d.bat) Object.assign(d.bat, o.bat);
+    if (o.bowl && d.bowl) Object.assign(d.bowl, o.bowl);
+  });
+  saveJsonToStorage(RATING_OVERRIDES_KEY, {});
+  saveJsonToStorage(RATING_ORIGINALS_KEY, {});
+  renderAll();
+  renderImportComparison('Reverted to Squad Ledger\u2019s original ratings.');
+}
+
+function renderImportComparison(bannerMessage) {
+  const panel = document.getElementById('importDbPanel');
+  if (!importedPlayers) {
+    panel.innerHTML = `
+      <div class="import-panel">
+        <div class="import-panel-title">Import a player DB for rating comparison</div>
+        <div class="import-panel-sub">Upload or paste a MatchSim player DB (JSON with a <code>players</code> array). Each matched player's rating and skill will be compared side-by-side against Squad Ledger's own numbers, sorted by biggest disagreement first &mdash; so you get a precise read on where the two systems differ before building squads.</div>
+        <div class="import-controls-row">
+          <input type="file" id="importFileInput" accept="application/json,.json">
+          <button id="importCompareBtn" class="sb-btn">Compare pasted JSON</button>
+        </div>
+        <textarea id="importPasteArea" class="import-textarea" placeholder="...or paste the player DB JSON here"></textarea>
+        <div id="importResultsArea"></div>
+      </div>`;
+    document.getElementById('importFileInput').addEventListener('change', handleImportFileUpload);
+    document.getElementById('importCompareBtn').addEventListener('click', () => {
+      processImportedDbText(document.getElementById('importPasteArea').value);
+    });
+    return;
+  }
+
+  const { rows, unmatched } = computeImportComparisonRows();
+  const totalImported = importedPlayers.length;
+  const matchedCount = rows.length;
+  const bigMismatchCount = rows.filter(r => r.totalAbsDiff >= 15).length;
+  const applyableCount = rows.filter(r => r.msBat != null || r.msBowl != null).length;
+  const hasAppliedOverrides = Object.keys(loadJsonFromStorage(RATING_OVERRIDES_KEY)).length > 0;
+
+  let filtered = rows;
+  if (importSearchQuery.trim()) {
+    const q = importSearchQuery.toLowerCase();
+    filtered = filtered.filter(r => r.name.toLowerCase().includes(q));
+  }
+  if (importShowUnmatchedOnly) filtered = filtered.filter(r => r.totalAbsDiff > 0);
+
+  const sorters = {
+    diff: (a, b) => b.totalAbsDiff - a.totalAbsDiff,
+    name: (a, b) => a.name.localeCompare(b.name),
+    batDiff: (a, b) => Math.abs(b.batDiff || 0) - Math.abs(a.batDiff || 0),
+    bowlDiff: (a, b) => Math.abs(b.bowlDiff || 0) - Math.abs(a.bowlDiff || 0)
+  };
+  filtered = [...filtered].sort(sorters[importSortMode] || sorters.diff);
+
+  const rowsHtml = filtered.map(r => `
+    <tr>
+      <td style="text-align:left;">${r.name}</td>
+      <td>${r.slBat != null ? chipHtml(r.slBat, r.slBatSkill) : '&mdash;'}</td>
+      <td>${r.msBat != null ? `<span class="chip ${tierClass(r.msBat)}">${r.msBat}<span class="skill ${skillClass(r.msBatSkill)}">${r.msBatSkill || ''}</span></span>` : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBatSkillRaw || ''}</div></td>
+      <td>${diffCellHtml(r.batDiff)}</td>
+      <td>${r.slBowl != null ? chipHtml(r.slBowl, r.slBowlSkill) : '&mdash;'}</td>
+      <td>${r.msBowl != null ? `<span class="chip ${tierClass(r.msBowl)}">${r.msBowl}<span class="skill ${skillClass(r.msBowlSkill)}">${r.msBowlSkill || ''}</span></span>` : '&mdash;'}<div style="font-size:10px;color:var(--ink-dim);">${r.msBowlSkillRaw || ''}</div></td>
+      <td>${diffCellHtml(r.bowlDiff)}</td>
+    </tr>`).join('');
+
+  panel.innerHTML = `
+    <div class="import-panel">
+      <div class="import-panel-title">Rating comparison &mdash; imported DB vs Squad Ledger</div>
+      <div class="import-panel-sub">Sorted by biggest total disagreement first. "SL" columns are Squad Ledger's own numbers; "Imported" columns come from the file you loaded. Applying updates ratings and skills only &mdash; your squads and team assignments are never touched.</div>
+      ${bannerMessage ? `<div style="background:rgba(75,145,99,0.14); border:1px solid var(--turf-light); border-radius:8px; padding:9px 12px; font-size:12.5px; margin-bottom:12px;">${bannerMessage}</div>` : ''}
+      <div class="import-summary-row">
+        <div class="import-summary-stat"><b>${totalImported}</b><span>Imported players</span></div>
+        <div class="import-summary-stat"><b>${matchedCount}</b><span>Matched by name</span></div>
+        <div class="import-summary-stat"><b>${unmatched.length}</b><span>Unmatched</span></div>
+        <div class="import-summary-stat"><b>${bigMismatchCount}</b><span>Diff &ge; 15 pts</span></div>
+      </div>
+      <div class="import-controls-row">
+        <button id="importApplyBtn" class="sb-btn">Apply all ${applyableCount} imported ratings to Squad Ledger</button>
+        ${hasAppliedOverrides ? `<button id="importUndoBtn" class="sb-btn sb-btn-ghost">Undo applied ratings</button>` : ''}
+      </div>
+      <div class="import-filter-row">
+        <input type="text" id="importSearchInput" placeholder="Search player..." value="${importSearchQuery}">
+        <select id="importSortSelect">
+          <option value="diff" ${importSortMode === 'diff' ? 'selected' : ''}>Sort: biggest total diff</option>
+          <option value="batDiff" ${importSortMode === 'batDiff' ? 'selected' : ''}>Sort: biggest bat diff</option>
+          <option value="bowlDiff" ${importSortMode === 'bowlDiff' ? 'selected' : ''}>Sort: biggest bowl diff</option>
+          <option value="name" ${importSortMode === 'name' ? 'selected' : ''}>Sort: name (A-Z)</option>
+        </select>
+        <label style="font-size:12.5px;color:var(--ink-dim);"><input type="checkbox" id="importUnmatchedOnlyCheck" ${importShowUnmatchedOnly ? 'checked' : ''}> Only show players with a difference</label>
+        <button id="importResetBtn" class="sb-btn sb-btn-ghost" style="padding:5px 10px;font-size:12px;">Load a different DB</button>
+      </div>
+      <table class="matrix-table import-diff-table">
+        <thead>
+          <tr><th>Player</th><th>SL Bat</th><th>Imported Bat</th><th>&#916;</th><th>SL Bowl</th><th>Imported Bowl</th><th>&#916;</th></tr>
+        </thead>
+        <tbody>${rowsHtml || '<tr><td colspan="7" style="color:var(--ink-dim);">No players match this filter.</td></tr>'}</tbody>
+      </table>
+      ${unmatched.length > 0 ? `
+        <span class="import-unmatched-toggle" id="importUnmatchedToggle">Show ${unmatched.length} unmatched player${unmatched.length === 1 ? '' : 's'} (in imported DB, not found in Squad Ledger)</span>
+        <div class="import-unmatched-list" id="importUnmatchedList">${unmatched.join(' &middot; ')}</div>
+      ` : ''}
+    </div>`;
+
+  document.getElementById('importApplyBtn').addEventListener('click', applyImportedRatings);
+  const undoBtn = document.getElementById('importUndoBtn');
+  if (undoBtn) undoBtn.addEventListener('click', undoRatingOverrides);
+  document.getElementById('importSearchInput').addEventListener('input', e => {
+    importSearchQuery = e.target.value;
+    renderImportComparison();
+    document.getElementById('importSearchInput').focus();
+    const val = document.getElementById('importSearchInput').value;
+    document.getElementById('importSearchInput').setSelectionRange(val.length, val.length);
+  });
+  document.getElementById('importSortSelect').addEventListener('change', e => {
+    importSortMode = e.target.value;
+    renderImportComparison();
+  });
+  document.getElementById('importUnmatchedOnlyCheck').addEventListener('change', e => {
+    importShowUnmatchedOnly = e.target.checked;
+    renderImportComparison();
+  });
+  document.getElementById('importResetBtn').addEventListener('click', () => {
+    importedPlayers = null;
+    renderImportComparison();
+  });
+  const toggle = document.getElementById('importUnmatchedToggle');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      document.getElementById('importUnmatchedList').classList.toggle('open');
+    });
+  }
+}
+
+document.getElementById('importDbBtn').addEventListener('click', () => {
+  const panel = document.getElementById('importDbPanel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden && !panel.innerHTML.trim()) renderImportComparison();
+});
+// =================== End Player DB Import / Rating Comparison ===================
 
 function renderAll() {
   renderOverview();
