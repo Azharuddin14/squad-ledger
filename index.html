@@ -516,6 +516,7 @@
   .skill-gold { color: var(--gold) !important; opacity: 1 !important; font-weight: 700; }
   .skill-silver { color: var(--silver) !important; opacity: 1 !important; font-weight: 700; }
   .skill-bronze { color: var(--bronze) !important; opacity: 1 !important; font-weight: 700; }
+  .chip-unimported { outline: 2px dashed #9b8cf2; outline-offset: 1px; }
 
   .tier-95 { background: linear-gradient(180deg, rgba(255,183,3,0.22), rgba(255,183,3,0.08)); border: 1.5px solid var(--gold); color: var(--gold); }
   .tier-90 { background: linear-gradient(180deg, rgba(207,216,220,0.20), rgba(207,216,220,0.06)); border: 1.5px solid var(--silver); color: var(--silver); }
@@ -833,9 +834,10 @@ function skillClass(skill) {
   if (skill === 'M' || skill === 'N' || skill === 'S') return 'skill-silver';
   return 'skill-bronze';
 }
-function chipHtml(rating, skill) {
+function chipHtml(rating, skill, playerName) {
   if (rating == null) return '';
-  return `<span class="chip ${tierClass(rating)}">${rating}<span class="skill ${skillClass(skill)}">${skill||''}</span></span>`;
+  const unimportedCls = (playerName && !overriddenPlayerNames.has(playerName)) ? ' chip-unimported' : '';
+  return `<span class="chip ${tierClass(rating)}${unimportedCls}">${rating}<span class="skill ${skillClass(skill)}">${skill||''}</span></span>`;
 }
 
 // Re-renders the team panel without losing the user's place. There are TWO
@@ -926,9 +928,9 @@ function renderTeamPanel() {
     const d = DATA.playerDetail[p];
     const b = d.bat, w = d.bowl;
     let ratings = '';
-    if (b && w) ratings = chipHtml(b.rating, b.skill) + chipHtml(w.rating, w.skill);
-    else if (b) ratings = chipHtml(b.rating, b.skill);
-    else ratings = chipHtml(w.rating, w.skill);
+    if (b && w) ratings = chipHtml(b.rating, b.skill, p) + chipHtml(w.rating, w.skill, p);
+    else if (b) ratings = chipHtml(b.rating, b.skill, p);
+    else ratings = chipHtml(w.rating, w.skill, p);
 
     if (opts.lentOut) {
       return `<div class="player-card player-card-lent" data-player="${p}">
@@ -1173,6 +1175,13 @@ function applyRatingOverridesToData(overrides) {
 
 // Apply any overrides saved from a previous session before the first render.
 applyRatingOverridesToData(loadJsonFromStorage(RATING_OVERRIDES_KEY));
+
+// Names of players whose rating/skill has been overwritten by an applied
+// import — chipHtml() marks anyone NOT in this set (i.e. still on Squad
+// Ledger's own original numbers) with a dashed outline, so it's obvious at a
+// glance which players in a squad are backed by a MatchSim import and which
+// aren't. Refreshed after every apply/undo.
+let overriddenPlayerNames = new Set(Object.keys(loadJsonFromStorage(RATING_OVERRIDES_KEY)));
 let winnerTeamCache = {};
 let poachedVisible = {};
 
@@ -1706,9 +1715,9 @@ function playerRatingsHtml(player) {
   const d = DATA.playerDetail[player];
   if (!d) return '';
   const b = d.bat, w = d.bowl;
-  if (b && w) return chipHtml(b.rating, b.skill) + chipHtml(w.rating, w.skill);
-  if (b) return chipHtml(b.rating, b.skill);
-  if (w) return chipHtml(w.rating, w.skill);
+  if (b && w) return chipHtml(b.rating, b.skill, player) + chipHtml(w.rating, w.skill, player);
+  if (b) return chipHtml(b.rating, b.skill, player);
+  if (w) return chipHtml(w.rating, w.skill, player);
   return '';
 }
 
@@ -2083,8 +2092,8 @@ function renderLineupCard(era, team) {
     // always right. An empty placeholder holds the slot's width when a
     // player has no rating in that discipline, so the two columns of
     // numbers line up consistently down the whole XI regardless of role.
-    const batSlot = b ? chipHtml(b.rating, b.skill) : `<span class="chip-slot-empty"></span>`;
-    const bowlSlot = w ? chipHtml(w.rating, w.skill) : `<span class="chip-slot-empty"></span>`;
+    const batSlot = b ? chipHtml(b.rating, b.skill, p) : `<span class="chip-slot-empty"></span>`;
+    const bowlSlot = w ? chipHtml(w.rating, w.skill, p) : `<span class="chip-slot-empty"></span>`;
     const natStyle = NATION_STYLE[getPlayerNationality(p)];
     const nameColor = natStyle ? natStyle.accent : 'var(--ink)';
     return `<div class="lineup-player-row">
@@ -2278,8 +2287,8 @@ function renderPlayersTable(filterText) {
   }
 
   let rows = visible.map(({ p, rank }) => {
-    const batCell = p.batR != null ? chipHtml(p.batR, p.batSkill) : '<span style="opacity:0.3">&mdash;</span>';
-    const bowlCell = p.bowlR != null ? chipHtml(p.bowlR, p.bowlSkill) : '<span style="opacity:0.3">&mdash;</span>';
+    const batCell = p.batR != null ? chipHtml(p.batR, p.batSkill, p.name) : '<span style="opacity:0.3">&mdash;</span>';
+    const bowlCell = p.bowlR != null ? chipHtml(p.bowlR, p.bowlSkill, p.name) : '<span style="opacity:0.3">&mdash;</span>';
     const eraTeamCells = DATA.overview.eras.map(era => {
       const team = p.pres[era];
       const code = team ? (TEAM_CODE[team] || team.slice(0,3).toUpperCase()) : '\u2014';
@@ -2394,18 +2403,11 @@ function buildPlayerDetailIndex() {
   return { exact, fuzzy };
 }
 
-// MatchSim's own skill categories, reduced to a single letter for compact
-// chip display and gold/silver/bronze tiering — this is MatchSim's own
-// scheme (not a translation into Squad Ledger's original letters), so the
-// full descriptive name is still kept as skillLabel wherever it's applied.
-const MS_BAT_SKILL_LETTER = {
-  'Specialist Batsman': 'T', 'Compulsive Slogger': 'S', 'Finisher': 'F',
-  'Pinch Hitter': 'P', 'None': 'X'
-};
-const MS_BOWL_SKILL_LETTER = {
-  'Specialist Bowler': 'W', 'New Ball Bowler': 'N', 'Mystery Spinner': 'M',
-  'Death/Old Ball Bowler': 'D', 'None': 'X'
-};
+// No translation happens here — whatever string MatchSim's battingSkill/
+// bowlingSkill fields literally contain is imported and applied byte-for-byte
+// (used as both the short skill code and its own label). If MatchSim's export
+// format changes — e.g. starts writing single letters instead of full names,
+// or vice versa — this still does the right thing with no code change needed.
 
 function resolvePlayerName(msName, nameIdx) {
   const alias = MANUAL_NAME_ALIASES[msName] || MANUAL_NAME_ALIASES[normalizeNameForMatch(msName)];
@@ -2532,10 +2534,10 @@ function computeImportComparisonRows() {
     rows.push({
       name: slName,
       slBat, slBatSkill: slDetail.bat ? slDetail.bat.skill : null, slBatSkillLabel: slDetail.bat ? slDetail.bat.skillLabel : null,
-      msBat, msBatSkillName: p.battingSkill || null, msBatSkill: MS_BAT_SKILL_LETTER[p.battingSkill] || null,
+      msBat, msBatSkillName: p.battingSkill || null, msBatSkill: p.battingSkill || null,
       batDiff,
       slBowl, slBowlSkill: slDetail.bowl ? slDetail.bowl.skill : null, slBowlSkillLabel: slDetail.bowl ? slDetail.bowl.skillLabel : null,
-      msBowl, msBowlSkillName: p.bowlingSkill || null, msBowlSkill: MS_BOWL_SKILL_LETTER[p.bowlingSkill] || null,
+      msBowl, msBowlSkillName: p.bowlingSkill || null, msBowlSkill: p.bowlingSkill || null,
       bowlDiff,
       totalAbsDiff
     });
@@ -2593,6 +2595,7 @@ function applyImportedRatings() {
   applyRatingOverridesToData(overrides);
   saveJsonToStorage(RATING_OVERRIDES_KEY, overrides);
   saveJsonToStorage(RATING_ORIGINALS_KEY, originals);
+  overriddenPlayerNames = new Set(Object.keys(overrides));
   renderAll();
   renderImportComparison(`Applied updated ratings for ${appliedCount} player${appliedCount === 1 ? '' : 's'}. Squads and team assignments were left untouched.`);
 }
@@ -2610,6 +2613,7 @@ function undoRatingOverrides() {
   });
   saveJsonToStorage(RATING_OVERRIDES_KEY, {});
   saveJsonToStorage(RATING_ORIGINALS_KEY, {});
+  overriddenPlayerNames = new Set();
   renderAll();
   renderImportComparison('Reverted to Squad Ledger\u2019s original ratings.');
 }
