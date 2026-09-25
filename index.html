@@ -184,6 +184,10 @@
     font-family: 'Teko', sans-serif; font-weight: 700; font-size: 40px;
     margin: 4px 0 0; text-shadow: 0 0 24px rgba(75,145,99,0.35);
   }
+  .app-version-tag {
+    font-family: 'Inter', sans-serif; font-size: 10.5px; color: var(--ink-dim);
+    margin: 4px 0 0; letter-spacing: 0.02em;
+  }
 
   /* Overview cards */
   .overview-grid {
@@ -655,6 +659,7 @@
   <div class="masthead">
     <div class="eyebrow">Cross-League &middot; Cross-Era Analytics</div>
     <h1>SQUAD LEDGER DASHBOARD</h1>
+    <p class="app-version-tag">Build 2026-09-24 &middot; stale rating clears when MatchSim has no discipline for a player</p>
     <button id="openLineupsBtn" class="sb-btn lineups-trigger-btn">&#128220; Saved Lineups</button>
     <div class="backup-restore-row">
       <button id="backupBtn" class="sb-btn sb-btn-ghost backup-restore-btn">&#11015;&#65039; Backup</button>
@@ -1168,12 +1173,17 @@ function applyRatingOverridesToData(overrides) {
     const d = DATA.playerDetail[name];
     if (!d) return;
     const o = overrides[name];
-    // A player's original record may have no bat (or no bowl) object at all
-    // — e.g. an all-rounder Squad Ledger only ever entered bowling stats
-    // for. Create it rather than silently skipping the rating, or an
-    // imported batting/bowling rating for such a player would never show.
-    if (o.bat) { if (!d.bat) d.bat = {}; Object.assign(d.bat, o.bat); }
-    if (o.bowl) { if (!d.bowl) d.bowl = {}; Object.assign(d.bowl, o.bowl); }
+    // An explicit null (as opposed to the key being absent) means MatchSim
+    // said this player has no rating for that discipline — clear it rather
+    // than leaving Squad Ledger's old value in place.
+    if ('bat' in o) {
+      if (o.bat === null) delete d.bat;
+      else { if (!d.bat) d.bat = {}; Object.assign(d.bat, o.bat); }
+    }
+    if ('bowl' in o) {
+      if (o.bowl === null) delete d.bowl;
+      else { if (!d.bowl) d.bowl = {}; Object.assign(d.bowl, o.bowl); }
+    }
   });
 }
 
@@ -2578,23 +2588,32 @@ function applyImportedRatings() {
   rows.forEach(r => {
     const d = DATA.playerDetail[r.name];
     if (!d) return;
-    if (r.msBat == null && r.msBowl == null) return;
 
     if (!originals[r.name]) originals[r.name] = {};
     const thisOverride = { name: r.name };
+    let touched = false;
 
+    // Batting: MatchSim gave a real rating → set/create it. MatchSim
+    // explicitly has no batting for this player (rating 0, skill "None") →
+    // clear whatever Squad Ledger had for it, so the result matches
+    // MatchSim's data exactly rather than leaving a stale old rating behind
+    // for a discipline MatchSim says this player doesn't have.
     if (r.msBat != null) {
-      // If the player had no bat object at all before (an all-rounder Squad
-      // Ledger only ever recorded bowling for), snapshot that absence as an
-      // explicit null so undo can correctly remove the field again rather
-      // than leaving a bat rating behind that was never really "theirs".
       if (!('bat' in originals[r.name])) {
         originals[r.name].bat = d.bat ? { rating: d.bat.rating, skill: d.bat.skill, skillLabel: d.bat.skillLabel } : null;
       }
       const skill = r.msBatSkill || (d.bat && d.bat.skill);
       const skillLabel = r.msBatSkillName || (d.bat && d.bat.skillLabel);
       thisOverride.bat = { rating: r.msBat, skill, skillLabel };
+      touched = true;
+    } else if (d.bat) {
+      if (!('bat' in originals[r.name])) {
+        originals[r.name].bat = { rating: d.bat.rating, skill: d.bat.skill, skillLabel: d.bat.skillLabel };
+      }
+      thisOverride.bat = null;
+      touched = true;
     }
+
     if (r.msBowl != null) {
       if (!('bowl' in originals[r.name])) {
         originals[r.name].bowl = d.bowl ? { rating: d.bowl.rating, skill: d.bowl.skill, skillLabel: d.bowl.skillLabel } : null;
@@ -2602,11 +2621,20 @@ function applyImportedRatings() {
       const skill = r.msBowlSkill || (d.bowl && d.bowl.skill);
       const skillLabel = r.msBowlSkillName || (d.bowl && d.bowl.skillLabel);
       thisOverride.bowl = { rating: r.msBowl, skill, skillLabel };
+      touched = true;
+    } else if (d.bowl) {
+      if (!('bowl' in originals[r.name])) {
+        originals[r.name].bowl = { rating: d.bowl.rating, skill: d.bowl.skill, skillLabel: d.bowl.skillLabel };
+      }
+      thisOverride.bowl = null;
+      touched = true;
     }
 
+    if (!touched) return;
     overrides[r.name] = Object.assign({}, overrides[r.name], thisOverride);
     appliedCount++;
   });
+
 
   applyRatingOverridesToData(overrides);
   saveJsonToStorage(RATING_OVERRIDES_KEY, overrides);
