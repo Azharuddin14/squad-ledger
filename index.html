@@ -1168,8 +1168,12 @@ function applyRatingOverridesToData(overrides) {
     const d = DATA.playerDetail[name];
     if (!d) return;
     const o = overrides[name];
-    if (o.bat && d.bat) Object.assign(d.bat, o.bat);
-    if (o.bowl && d.bowl) Object.assign(d.bowl, o.bowl);
+    // A player's original record may have no bat (or no bowl) object at all
+    // — e.g. an all-rounder Squad Ledger only ever entered bowling stats
+    // for. Create it rather than silently skipping the rating, or an
+    // imported batting/bowling rating for such a player would never show.
+    if (o.bat) { if (!d.bat) d.bat = {}; Object.assign(d.bat, o.bat); }
+    if (o.bowl) { if (!d.bowl) d.bowl = {}; Object.assign(d.bowl, o.bowl); }
   });
 }
 
@@ -2579,20 +2583,24 @@ function applyImportedRatings() {
     if (!originals[r.name]) originals[r.name] = {};
     const thisOverride = { name: r.name };
 
-    if (r.msBat != null && d.bat) {
-      if (!originals[r.name].bat) {
-        originals[r.name].bat = { rating: d.bat.rating, skill: d.bat.skill, skillLabel: d.bat.skillLabel };
+    if (r.msBat != null) {
+      // If the player had no bat object at all before (an all-rounder Squad
+      // Ledger only ever recorded bowling for), snapshot that absence as an
+      // explicit null so undo can correctly remove the field again rather
+      // than leaving a bat rating behind that was never really "theirs".
+      if (!('bat' in originals[r.name])) {
+        originals[r.name].bat = d.bat ? { rating: d.bat.rating, skill: d.bat.skill, skillLabel: d.bat.skillLabel } : null;
       }
-      const skill = r.msBatSkill || d.bat.skill;
-      const skillLabel = r.msBatSkillName || d.bat.skillLabel;
+      const skill = r.msBatSkill || (d.bat && d.bat.skill);
+      const skillLabel = r.msBatSkillName || (d.bat && d.bat.skillLabel);
       thisOverride.bat = { rating: r.msBat, skill, skillLabel };
     }
-    if (r.msBowl != null && d.bowl) {
-      if (!originals[r.name].bowl) {
-        originals[r.name].bowl = { rating: d.bowl.rating, skill: d.bowl.skill, skillLabel: d.bowl.skillLabel };
+    if (r.msBowl != null) {
+      if (!('bowl' in originals[r.name])) {
+        originals[r.name].bowl = d.bowl ? { rating: d.bowl.rating, skill: d.bowl.skill, skillLabel: d.bowl.skillLabel } : null;
       }
-      const skill = r.msBowlSkill || d.bowl.skill;
-      const skillLabel = r.msBowlSkillName || d.bowl.skillLabel;
+      const skill = r.msBowlSkill || (d.bowl && d.bowl.skill);
+      const skillLabel = r.msBowlSkillName || (d.bowl && d.bowl.skillLabel);
       thisOverride.bowl = { rating: r.msBowl, skill, skillLabel };
     }
 
@@ -2616,8 +2624,17 @@ function undoRatingOverrides() {
     const d = DATA.playerDetail[name];
     if (!d) return;
     const o = originals[name];
-    if (o.bat && d.bat) Object.assign(d.bat, o.bat);
-    if (o.bowl && d.bowl) Object.assign(d.bowl, o.bowl);
+    // null here means the player had no bat (or bowl) object at all before
+    // an import created one — undo should remove it entirely, not just
+    // restore it to some prior state that never existed.
+    if ('bat' in o) {
+      if (o.bat === null) delete d.bat;
+      else { if (!d.bat) d.bat = {}; Object.assign(d.bat, o.bat); }
+    }
+    if ('bowl' in o) {
+      if (o.bowl === null) delete d.bowl;
+      else { if (!d.bowl) d.bowl = {}; Object.assign(d.bowl, o.bowl); }
+    }
   });
   saveJsonToStorage(RATING_OVERRIDES_KEY, {});
   saveJsonToStorage(RATING_ORIGINALS_KEY, {});
