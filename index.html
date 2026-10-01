@@ -702,7 +702,7 @@
   <div class="masthead">
     <div class="eyebrow" id="mastEyebrow">Cross-League &middot; Cross-Era Analytics</div>
     <h1>SQUAD LEDGER DASHBOARD</h1>
-    <p class="app-version-tag">Build 2026-09-28c &middot; Final ratings polish (Cricinfo T20I record + reputation) &middot; exact era windows</p>
+    <p class="app-version-tag">Build 2026-10-01 &middot; Player filter: None (batting) / None (bowling)</p>
     <div class="mode-toggle" role="group" aria-label="Dataset">
       <button type="button" data-mode="club" id="modeClubBtn">Club</button>
       <button type="button" data-mode="nation" id="modeNationBtn">Nation</button>
@@ -3054,7 +3054,8 @@ function playerSkillOptionsHtml() {
     `<option value="bat:${l}">${isNation ? MS_BAT_SKILL_NAME[l] : 'Bat skill ' + l}</option>`).join('');
   const bowlOpts = bowlOrder.filter(l => isNation || bowlLetters.has(l)).map(l =>
     `<option value="bowl:${l}">${isNation ? MS_BOWL_SKILL_NAME[l] : 'Bowl skill ' + l}</option>`).join('');
-  return `<option value="">All skills</option>${batOpts}${bowlOpts}`;
+  // "None" = a real (rated) discipline with no special skill
+  return `<option value="">All skills</option>${batOpts}<option value="bat:X">None (batting)</option>${bowlOpts}<option value="bowl:X">None (bowling)</option>`;
 }
 
 const PLAYER_SORTERS = {
