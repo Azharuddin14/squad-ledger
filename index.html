@@ -702,7 +702,7 @@
   <div class="masthead">
     <div class="eyebrow" id="mastEyebrow">Cross-League &middot; Cross-Era Analytics</div>
     <h1>SQUAD LEDGER DASHBOARD</h1>
-    <p class="app-version-tag">Build 2026-10-01d &middot; Club ratings from franchise T20 records (all players)</p>
+    <p class="app-version-tag">Build 2026-10-01e &middot; Handles players with no batting or bowling rating</p>
     <div class="mode-toggle" role="group" aria-label="Dataset">
       <button type="button" data-mode="club" id="modeClubBtn">Club</button>
       <button type="button" data-mode="nation" id="modeNationBtn">Nation</button>
@@ -1008,7 +1008,8 @@ function renderTeamPanel() {
     let ratings = '';
     if (b && w) ratings = chipHtml(b.rating, b.skill, p) + chipHtml(w.rating, w.skill, p);
     else if (b) ratings = chipHtml(b.rating, b.skill, p);
-    else ratings = chipHtml(w.rating, w.skill, p);
+    else if (w) ratings = chipHtml(w.rating, w.skill, p);
+    else ratings = '<span class="chip">&mdash;</span>';   // no rating in either discipline yet
 
     if (opts.lentOut) {
       return `<div class="player-card player-card-lent" data-player="${p}">
